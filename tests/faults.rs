@@ -8,9 +8,16 @@
 use archipelago::{sha256, Cluster, Error, Options};
 
 fn write_corpus(c: &mut Cluster, seed: u64) -> Vec<(String, Vec<u8>)> {
+    // ARCH_FAULT_FILES raises the corpus size for stress runs; the default is
+    // the historical twelve.
+    let files: u64 = std::env::var("ARCH_FAULT_FILES")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(12)
+        .max(12);
     c.mkdir("/c").unwrap();
     let mut out = Vec::new();
-    for i in 0..12u64 {
+    for i in 0..files {
         let len = ((seed.wrapping_mul(31).wrapping_add(i * 997)) % 9000) as usize + 1;
         let data: Vec<u8> = (0..len).map(|j| (j as u64 ^ (i + seed)) as u8).collect();
         let path = format!("/c/f{i}");
