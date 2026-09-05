@@ -21,6 +21,25 @@
 //!
 //! Op count is controllable with ARCH_FUZZ_OPS.
 
+// Gate tests intentionally use terse helpers and magic seed constants, and
+// their local helper functions do not carry rustdoc error sections. Casts
+// come from bounded modulo draws and short loop names are conventional here.
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::doc_markdown,
+    clippy::must_use_candidate,
+    clippy::match_same_arms,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::single_match_else,
+    clippy::too_many_lines
+)]
+
 use archipelago::{Cluster, Error, Options};
 use std::collections::BTreeSet;
 
@@ -281,8 +300,9 @@ fn run_seed(seed: u64, ops: usize) {
                 }
             }
             1 => {
-                match c.read_file(p) {
-                    Ok(bytes) => match o.read(p) {
+                // Reads may fail under faults, which is allowed.
+                if let Ok(bytes) = c.read_file(p) {
+                    match o.read(p) {
                         Some(want) => {
                             if tainted.contains(p) {
                                 o.adopt_file(p, &bytes);
@@ -300,8 +320,7 @@ fn run_seed(seed: u64, ops: usize) {
                             );
                             o.adopt_file(p, &bytes);
                         }
-                    },
-                    Err(_) => {} // reads may fail under faults
+                    }
                 }
             }
             2 => {

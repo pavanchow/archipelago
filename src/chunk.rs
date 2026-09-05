@@ -57,6 +57,10 @@ impl Manifest {
     }
 
     /// Deserialize from bytes.
+/// # Errors
+///
+/// /// Returns [`Error::Decode`] when any field is truncated, the chunk
+/// /// count is out of range, or the erasure tag is malformed.
     pub fn decode(d: &mut Decoder<'_>) -> Result<Manifest> {
         let size = d.get_uvarint()?;
         let content_hash = d.get_hash()?;
@@ -95,6 +99,9 @@ impl Manifest {
 /// The returned chunk vector follows file order and may contain duplicates when
 /// two positions hold identical bytes. Callers that store chunks should dedupe
 /// by [`Chunk::id`].
+/// # Panics
+/// ///
+/// /// Panics when `chunk_size` is zero, which cannot produce a layout.
 pub fn chunk_bytes(data: &[u8], chunk_size: usize) -> (Vec<Chunk>, Manifest) {
     assert!(chunk_size > 0, "chunk_size must be positive");
     let mut chunks = Vec::new();
@@ -118,7 +125,7 @@ pub fn chunk_bytes(data: &[u8], chunk_size: usize) -> (Vec<Chunk>, Manifest) {
 
 /// Concatenate ordered chunk payloads back into the original byte stream.
 pub fn reassemble(parts: &[Vec<u8>]) -> Vec<u8> {
-    let total: usize = parts.iter().map(|p| p.len()).sum();
+    let total: usize = parts.iter().map(Vec::len).sum();
     let mut out = Vec::with_capacity(total);
     for p in parts {
         out.extend_from_slice(p);

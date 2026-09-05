@@ -189,6 +189,10 @@ impl Network {
 
     /// Deliver the next due message. Messages whose endpoints became
     /// disconnected while in flight are dropped. Returns the decoded delivery.
+    /// # Panics
+    ///
+    /// Panics if an in-flight envelope fails to decode, which would mean a
+    /// broken encoder rather than bad input.
     pub fn step(&mut self) -> Option<(NodeId, NodeId, Message)> {
         while let Some(env) = self.queue.pop() {
             self.clock = self.clock.max(env.time);

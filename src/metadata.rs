@@ -208,14 +208,12 @@ impl MetaNode {
                 match parent(path) {
                     None => Err(code::INVALID_PATH),
                     Some(par) => {
-                        if !self.exists_dir(&par) {
-                            if self.files.contains_key(&par) {
-                                Err(code::NOT_A_DIRECTORY)
-                            } else {
-                                Err(code::NOT_FOUND)
-                            }
-                        } else {
+                        if self.exists_dir(&par) {
                             Ok(())
+                        } else if self.files.contains_key(&par) {
+                            Err(code::NOT_A_DIRECTORY)
+                        } else {
+                            Err(code::NOT_FOUND)
                         }
                     }
                 }
@@ -352,19 +350,17 @@ impl MetaNode {
                 }
             }
             Query::List { path } => {
-                if !self.exists_dir(path) {
-                    if self.files.contains_key(path) {
-                        QueryResult::Err(code::NOT_A_DIRECTORY)
-                    } else {
-                        QueryResult::Err(code::NOT_FOUND)
-                    }
-                } else {
+                if self.exists_dir(path) {
                     let mut entries: Vec<DirEntry> = self
                         .children(path)
                         .map(|(name, is_dir, size)| DirEntry { name, is_dir, size })
                         .collect();
                     entries.sort_by(|a, b| a.name.cmp(&b.name));
                     QueryResult::Listing(entries)
+                } else if self.files.contains_key(path) {
+                    QueryResult::Err(code::NOT_A_DIRECTORY)
+                } else {
+                    QueryResult::Err(code::NOT_FOUND)
                 }
             }
             Query::Stat { path } => {
@@ -388,6 +384,12 @@ impl MetaNode {
     }
 
     /// Handle one message. Returns (from, to, message) tuples to send.
+    /// # Panics
+    ///
+    /// Panics when a metadata quorum of one is configured and the node is
+    /// asked to replicate to itself, which the cluster never does.
+    /// The protocol dispatcher reads best as one match over message kinds.
+    #[allow(clippy::too_many_lines)]
     pub fn handle(&mut self, from: NodeId, msg: Message) -> Vec<(NodeId, NodeId, Message)> {
         let me = NodeId::Meta(self.idx);
         match msg {

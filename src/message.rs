@@ -22,6 +22,9 @@ pub enum NodeId {
 }
 
 impl NodeId {
+    // Every encode helper takes the encoder by reference for symmetry with the
+    // buffered writer style used across the wire format.
+    #[allow(clippy::trivially_copy_pass_by_ref)]
     fn encode(&self, e: &mut Encoder) {
         match self {
             NodeId::Client => e.put_u8(0),
@@ -351,12 +354,11 @@ impl Message {
         let mut e = Encoder::new();
         e.put_u8(self.tag());
         match self {
-            Message::StoreChunk { id, data } => {
+            Message::StoreChunk { id, data } | Message::Replicate { id, data } => {
                 e.put_hash(id);
                 e.put_bytes(data);
             }
-            Message::StoreAck { id } => e.put_hash(id),
-            Message::FetchChunk { id } => e.put_hash(id),
+            Message::StoreAck { id } | Message::FetchChunk { id } => e.put_hash(id),
             Message::ChunkData { id, data } => {
                 e.put_hash(id);
                 match data {
@@ -370,10 +372,6 @@ impl Message {
             Message::ReplicateOrder { id, dest } => {
                 e.put_hash(id);
                 e.put_uvarint(u64::from(*dest));
-            }
-            Message::Replicate { id, data } => {
-                e.put_hash(id);
-                e.put_bytes(data);
             }
             Message::Heartbeat { node, chunks } => {
                 e.put_uvarint(u64::from(*node));
@@ -408,6 +406,10 @@ impl Message {
     }
 
     /// Deserialize from bytes.
+/// # Errors
+///
+/// /// Returns [`Error::Decode`] for an unknown tag, a truncated body, or
+/// /// any field that fails its inner decode.
     pub fn decode(bytes: &[u8]) -> Result<Message> {
         let mut d = Decoder::new(bytes);
         let tag = d.get_u8()?;
@@ -594,6 +596,9 @@ pub fn encode_envelope(from: NodeId, to: NodeId, msg: &Message) -> Vec<u8> {
 }
 
 /// Deserialize a routed envelope produced by [`encode_envelope`].
+/// # Errors
+/// ///
+/// /// Returns [`Error::Decode`] when the routing header or body is malformed.
 pub fn decode_envelope(bytes: &[u8]) -> Result<(NodeId, NodeId, Message)> {
     let mut d = Decoder::new(bytes);
     let from = NodeId::decode(&mut d)?;

@@ -5,6 +5,25 @@
 //! licenses the simulator as a testing tool: a failing run is reproducible
 //! exactly from its seed.
 
+// Gate tests intentionally use terse helpers and magic seed constants, and
+// their local helper functions do not carry rustdoc error sections. Casts
+// come from bounded modulo draws and short loop names are conventional here.
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::doc_markdown,
+    clippy::must_use_candidate,
+    clippy::match_same_arms,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::single_match_else,
+    clippy::too_many_lines
+)]
+
 use archipelago::{Cluster, Hash, Options};
 
 fn scripted_run(seed: u64) -> (Hash, Hash) {

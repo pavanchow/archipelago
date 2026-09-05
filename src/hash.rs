@@ -3,6 +3,10 @@
 //! The hash is the backbone of content addressing. A chunk's identity is the
 //! SHA-256 of its bytes, and a file's integrity is the SHA-256 of its full
 //! contents. No external crate is used.
+// The K and H0 constants below are the canonical FIPS 180-4 values in their
+// published hex form, so they are not reformatted with digit separators, and
+// the compression state variables a through h follow the spec's own names.
+#![allow(clippy::unreadable_literal, clippy::many_single_char_names)]
 
 use std::fmt;
 

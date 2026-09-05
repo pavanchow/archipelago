@@ -25,6 +25,10 @@ pub fn encode_uvarint(mut value: u64, out: &mut Vec<u8>) {
 /// Returns the value and the number of bytes consumed. Encodings that would
 /// lose bits above bit 63 (more than ten bytes, or a tenth group above one)
 /// are rejected instead of silently wrapping.
+/// # Errors
+/// ///
+/// /// Returns [`Error::Decode`] when the varint is truncated or would lose
+/// /// bits above bit 63.
 pub fn decode_uvarint(buf: &[u8]) -> Result<(u64, usize)> {
     let mut result: u64 = 0;
     let mut shift = 0u32;
@@ -48,7 +52,7 @@ mod tests {
 
     #[test]
     fn round_trip_edge_values() {
-        for v in [0u64, 1, 127, 128, 255, 300, 16384, u32::MAX as u64, u64::MAX] {
+        for v in [0u64, 1, 127, 128, 255, 300, 16384, u64::from(u32::MAX), u64::MAX] {
             let mut buf = Vec::new();
             encode_uvarint(v, &mut buf);
             let (got, used) = decode_uvarint(&buf).unwrap();

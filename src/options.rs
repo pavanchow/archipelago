@@ -33,11 +33,11 @@ pub struct Options {
 }
 
 impl Default for Options {
-    /// Defaults: 64 KiB chunks, R=3 with write_quorum=2 and read_quorum=1.
+    /// Defaults: 64 KiB chunks, `R=3` with `write_quorum=2` and `read_quorum=1`.
     ///
-    /// R=3 tolerates the loss of any two replicas. write_quorum=2 means a write
+    /// `R=3` tolerates the loss of any two replicas. `write_quorum=2` means a write
     /// is durable on a majority of replicas before it is acknowledged, so it
-    /// survives one immediate replica loss. read_quorum=1 with read-repair is
+    /// survives one immediate replica loss. `read_quorum=1` with read-repair is
     /// safe because every returned chunk is verified against its content hash,
     /// so a single good copy is provably the right bytes.
     fn default() -> Self {
@@ -68,6 +68,10 @@ impl Options {
     /// A small cluster with erasure coding instead of replication. Every
     /// chunk becomes k data plus m parity shards spread over distinct nodes;
     /// a read needs any k of them.
+/// # Panics
+///
+/// /// Panics when `k` and `m` are outside the bounds accepted by
+/// /// [`crate::erasure::Erasure::new`].
     pub fn small_erasure(k: usize, m: usize) -> Self {
         Options {
             chunk_size: 1024,

@@ -90,6 +90,10 @@ impl Erasure {
     /// Build a scheme. Both parts must be at least one and their sum must
     /// stay within what a Cauchy matrix over GF(2^8) can span (255) and
     /// within a sane shard count.
+/// # Errors
+///
+/// /// Returns [`Error::InvalidPath`] when `k` or `m` is zero or their sum
+/// /// exceeds the scheme's cap.
     pub fn new(k: usize, m: usize) -> Result<Self> {
         if k == 0 || m == 0 {
             return Err(Error::InvalidPath(format!(
@@ -178,7 +182,7 @@ impl Erasure {
     /// read repair to rebuild a lost shard from survivors.
     pub fn encode_position(&self, data_shards: &[Vec<u8>], pos: usize) -> Vec<u8> {
         let row = self.encoding_row(pos);
-        let sl = data_shards.first().map(|d| d.len()).unwrap_or(0);
+        let sl = data_shards.first().map_or(0, Vec::len);
         let mut out = vec![0u8; sl];
         for (j, coef) in row.iter().enumerate() {
             if *coef == 0 {
@@ -231,6 +235,15 @@ impl Erasure {
     /// duplicate positions filled in, this fails cleanly.
     ///
     /// Returns the reconstructed chunk truncated to `chunk_len`.
+/// # Errors
+///
+/// /// Returns [`Error::ChunkUnavailable`] when fewer than `k` shards are
+/// /// present and [`Error::IntegrityError`] when shard lengths disagree or
+/// /// the selected encoding rows are singular.
+    /// # Panics
+    ///
+    /// Does not panic: every selected position is `Some` by construction and
+    /// the shard count is checked against the scheme before use.
     pub fn decode(&self, shards: &[Option<&[u8]>], chunk_len: usize) -> Result<Vec<u8>> {
         if shards.len() != self.total() {
             return Err(Error::IntegrityError);
@@ -287,6 +300,9 @@ impl Erasure {
 
 #[cfg(test)]
 mod tests {
+    // Numerical Recipes LCG constants in their canonical form.
+    #![allow(clippy::unreadable_literal)]
+
     use super::*;
     use crate::hash::sha256;
 

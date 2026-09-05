@@ -14,6 +14,25 @@
 //!    produce the identical state hash and the identical delivery order,
 //!    twice, at every sampled tuning.
 
+// Gate tests intentionally use terse helpers and magic seed constants, and
+// their local helper functions do not carry rustdoc error sections. Casts
+// come from bounded modulo draws and short loop names are conventional here.
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::doc_markdown,
+    clippy::must_use_candidate,
+    clippy::match_same_arms,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::single_match_else,
+    clippy::too_many_lines
+)]
+
 use archipelago::net::LinkParams;
 use archipelago::{Cluster, Hash, Options};
 use std::collections::BTreeSet;
@@ -43,6 +62,7 @@ fn sampled_options(r: &mut Rng) -> (Options, String) {
         replication_factor,
         write_quorum,
         read_quorum: 1,
+        erasure: None,
         node_count,
         meta_count,
         meta_quorum,
@@ -161,7 +181,7 @@ fn options_matrix_differential() {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(60);
-    let mut r = Rng::new(2026_09_05);
+    let mut r = Rng::new(20_260_905);
     for cfg in 0..20 {
         let (opts, label) = sampled_options(&mut r);
         for seed in [7u64, 8] {

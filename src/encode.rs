@@ -70,6 +70,9 @@ impl<'a> Decoder<'a> {
     }
 
     /// Read one tag byte.
+/// # Errors
+///
+/// /// Returns [`Error::Decode`] when the buffer is exhausted.
     pub fn get_u8(&mut self) -> Result<u8> {
         if self.pos >= self.buf.len() {
             return Err(Error::Decode("eof reading u8".into()));
@@ -80,6 +83,10 @@ impl<'a> Decoder<'a> {
     }
 
     /// Read one varint.
+/// # Errors
+///
+/// /// Returns [`Error::Decode`] when the varint is truncated or exceeds
+/// /// 64 bits.
     pub fn get_uvarint(&mut self) -> Result<u64> {
         let (v, used) = decode_uvarint(&self.buf[self.pos..])?;
         self.pos += used;
@@ -87,6 +94,10 @@ impl<'a> Decoder<'a> {
     }
 
     /// Read a length-prefixed byte slice into an owned vector.
+/// # Errors
+///
+/// /// Returns [`Error::Decode`] when the length prefix is out of range or
+/// /// the buffer ends early.
     pub fn get_bytes(&mut self) -> Result<Vec<u8>> {
         // A malformed length prefix can claim nearly 2^64 bytes. Compute the
         // end offset without overflow so bad input is a Decode error, never a
@@ -105,12 +116,18 @@ impl<'a> Decoder<'a> {
     }
 
     /// Read a length-prefixed UTF-8 string.
+/// # Errors
+///
+/// /// Returns [`Error::Decode`] when the bytes are truncated or not UTF-8.
     pub fn get_str(&mut self) -> Result<String> {
         let bytes = self.get_bytes()?;
         String::from_utf8(bytes).map_err(|_| Error::Decode("bad utf8".into()))
     }
 
     /// Read a fixed 32 byte hash.
+/// # Errors
+///
+/// /// Returns [`Error::Decode`] when fewer than 32 bytes remain.
     pub fn get_hash(&mut self) -> Result<Hash> {
         if self.pos + 32 > self.buf.len() {
             return Err(Error::Decode("eof reading hash".into()));
@@ -132,7 +149,7 @@ mod tests {
         let h = sha256(b"chunk");
         let mut e = Encoder::new();
         e.put_u8(9);
-        e.put_uvarint(123456);
+        e.put_uvarint(123_456);
         e.put_str("/a/b/c");
         e.put_bytes(&[1, 2, 3, 4, 5]);
         e.put_hash(&h);
@@ -140,7 +157,7 @@ mod tests {
 
         let mut d = Decoder::new(&bytes);
         assert_eq!(d.get_u8().unwrap(), 9);
-        assert_eq!(d.get_uvarint().unwrap(), 123456);
+        assert_eq!(d.get_uvarint().unwrap(), 123_456);
         assert_eq!(d.get_str().unwrap(), "/a/b/c");
         assert_eq!(d.get_bytes().unwrap(), vec![1, 2, 3, 4, 5]);
         assert_eq!(d.get_hash().unwrap(), h);

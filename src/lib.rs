@@ -26,6 +26,21 @@
 //! assert_eq!(c.read_file("/data/hello").unwrap(), b"hello archipelago");
 //! ```
 
+// Integer-width casts are deliberate conversions of values whose bounds are
+// enforced by construction: node indices, chunk counts, and sizes are all
+// checked or naturally bounded, and the PRNG mixes bits with wrapping
+// arithmetic by design. Names like `e` for an encoder or `h` for a hash
+// follow the spec and systems conventions, and none of the simulator's
+// accessors are fire-and-forget in a way must_use would clarify.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::must_use_candidate,
+    clippy::many_single_char_names,
+    clippy::similar_names
+)]
+
 pub mod chunk;
 pub mod client;
 pub mod cluster;

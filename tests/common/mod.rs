@@ -7,7 +7,14 @@
 //!
 //! This module is compiled once per integration-test binary, and each binary
 //! uses a different subset of the helpers, so unused warnings here are noise.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    clippy::missing_errors_doc,
+    clippy::doc_markdown,
+    clippy::must_use_candidate,
+    clippy::cast_possible_truncation,
+    clippy::similar_names
+)]
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -102,7 +109,7 @@ impl Oracle {
 
     /// File bytes, if the path is a file.
     pub fn read(&self, p: &str) -> Option<&[u8]> {
-        self.files.get(p).map(|v| v.as_slice())
+        self.files.get(p).map(Vec::as_slice)
     }
 
     /// All file paths, sorted.
@@ -136,12 +143,12 @@ impl Oracle {
 
     /// Whether a write to `p` would be accepted, without mutating.
     pub fn can_write(&self, p: &str) -> bool {
-        !self.is_dir(p) && parent(p).map(|par| self.is_dir(&par)).unwrap_or(false)
+        !self.is_dir(p) && parent(p).is_some_and(|par| self.is_dir(&par))
     }
 
     /// Whether a mkdir of `p` would be accepted, without mutating.
     pub fn can_mkdir(&self, p: &str) -> bool {
-        !self.exists(p) && parent(p).map(|par| self.is_dir(&par)).unwrap_or(false)
+        !self.exists(p) && parent(p).is_some_and(|par| self.is_dir(&par))
     }
 
     /// Whether a delete of `p` would be accepted, without mutating.
@@ -164,7 +171,7 @@ impl Oracle {
         if from == "/" || to == "/" || !self.exists(from) || self.exists(to) || is_under(to, from) {
             return false;
         }
-        parent(to).map(|p| self.is_dir(&p)).unwrap_or(false)
+        parent(to).is_some_and(|p| self.is_dir(&p))
     }
 
     /// Documented mkdir semantics: target must not exist, parent must be a
@@ -208,7 +215,7 @@ impl Oracle {
         if from == "/" || to == "/" || !self.exists(from) || self.exists(to) || is_under(to, from) {
             return Err(());
         }
-        let par_ok = parent(to).map(|p| self.is_dir(&p)).unwrap_or(false);
+        let par_ok = parent(to).is_some_and(|p| self.is_dir(&p));
         if !par_ok {
             return Err(());
         }

@@ -178,7 +178,7 @@ impl Cluster {
         // the promotion path above.
         let catchup = self.metas[&primary].snapshot();
         let all_meta: Vec<u32> = (0..self.opts.meta_count).collect();
-        for (&idx, node) in self.metas.iter_mut() {
+        for (&idx, node) in &mut self.metas {
             let is_primary = idx == primary;
             node.set_role(is_primary, all_meta.clone());
             if !is_primary {

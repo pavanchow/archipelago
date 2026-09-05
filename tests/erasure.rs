@@ -6,6 +6,25 @@
 //! back byte for byte, survive the loss of any m shard holders, fail cleanly
 //! beyond m, and self-heal when a read regenerates lost shards.
 
+// Gate tests intentionally use terse helpers and magic seed constants, and
+// their local helper functions do not carry rustdoc error sections. Casts
+// come from bounded modulo draws and short loop names are conventional here.
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::doc_markdown,
+    clippy::must_use_candidate,
+    clippy::match_same_arms,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::single_match_else,
+    clippy::too_many_lines
+)]
+
 use archipelago::{sha256, Cluster, Error, Options};
 
 mod common;
@@ -68,7 +87,7 @@ fn erasure_differential_against_oracle() {
                 }
                 1 => {
                     let sys = c.read_file(p);
-                    let ora = o.read(p).map(|b| b.to_vec());
+                    let ora = o.read(p).map(<[u8]>::to_vec);
                     assert_eq!(sys.is_ok(), ora.is_some(), "seed {seed} step {step}: read {p}");
                     if let (Ok(got), Some(want)) = (sys, ora) {
                         assert_eq!(&got, &want, "seed {seed} step {step}: bytes {p}");

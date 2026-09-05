@@ -7,6 +7,25 @@
 //! recursive listing matches. Runs in reliable network mode across several
 //! deterministic seeds. Op count is controllable with ARCH_FUZZ_OPS.
 
+// Gate tests intentionally use terse helpers and magic seed constants, and
+// their local helper functions do not carry rustdoc error sections. Casts
+// come from bounded modulo draws and short loop names are conventional here.
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::doc_markdown,
+    clippy::must_use_candidate,
+    clippy::match_same_arms,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::similar_names,
+    clippy::items_after_statements,
+    clippy::single_match_else,
+    clippy::too_many_lines
+)]
+
 use archipelago::{Cluster, Options};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -119,7 +138,7 @@ impl Oracle {
         if from == "/" || to == "/" || !self.exists(from) || self.exists(to) || is_under(to, from) {
             return Err(());
         }
-        let par_ok = parent(to).map(|p| self.is_dir(&p)).unwrap_or(false);
+        let par_ok = parent(to).is_some_and(|p| self.is_dir(&p));
         if !par_ok {
             return Err(());
         }

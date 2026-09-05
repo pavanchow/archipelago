@@ -13,7 +13,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("demo") => demo(),
-        Some("help") | Some("-h") | Some("--help") => print_help(),
+        Some("help" | "-h" | "--help") => print_help(),
         Some("repl") | None => repl(),
         Some(other) => {
             eprintln!("unknown command: {other}");
@@ -93,7 +93,8 @@ fn demo() {
     ];
     let mut contents = Vec::new();
     for (path, size) in files {
-        let data: Vec<u8> = (0..size).map(|i| (i * 37 + path.len()) as u8).collect();
+        #[allow(clippy::cast_possible_truncation)] // the value is reduced mod 251 first
+        let data: Vec<u8> = (0..size).map(|i| ((i * 37 + path.len()) % 251) as u8).collect();
         c.write_file(path, &data).unwrap();
         contents.push((path, data));
     }
@@ -131,6 +132,8 @@ fn demo() {
     println!("\ndemo complete, no data lost.");
 }
 
+// The REPL is intentionally one flat function over its command match.
+#[allow(clippy::too_many_lines)]
 fn repl() {
     let mut seed = 1u64;
     let mut c = Cluster::new(Options::small(), seed);
