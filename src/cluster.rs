@@ -171,9 +171,19 @@ impl Cluster {
             let snap = self.metas[&best].snapshot();
             self.metas.get_mut(&primary).unwrap().restore(snap);
         }
+        // Catch every backup up to the primary's committed state. A backup that
+        // missed replicated ops while offline holds a permanent gap in its log
+        // otherwise, can never apply anything again, and its stale buffer is
+        // dead weight. Modeled as an instant state transfer, consistent with
+        // the promotion path above.
+        let catchup = self.metas[&primary].snapshot();
         let all_meta: Vec<u32> = (0..self.opts.meta_count).collect();
         for (&idx, node) in self.metas.iter_mut() {
-            node.set_role(idx == primary, all_meta.clone());
+            let is_primary = idx == primary;
+            node.set_role(is_primary, all_meta.clone());
+            if !is_primary {
+                node.restore(catchup.clone());
+            }
         }
         let live_storage = self.live_storage();
         self.metas

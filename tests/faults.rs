@@ -95,6 +95,58 @@ fn exactly_r_failures_reports_unavailable_not_corrupt() {
 }
 
 #[test]
+fn committed_write_survives_meta_failure_sequence() {
+    // A write acknowledged by a metadata quorum must survive the loss of fewer
+    // than a quorum of metadata nodes at any single point in time. This
+    // exercises a subtler window than metadata_survives_primary_crash: a
+    // backup that holds a gap in its log must not let its acknowledgement
+    // count toward a commit quorum, because its acknowledgement does not yet
+    // mean the op is durable there.
+    let opts = Options {
+        meta_count: 5,
+        meta_quorum: 3,
+        ..Options::default()
+    };
+    let mut c = Cluster::new(opts, 11);
+
+    // Two backups are down while the first write commits, so they miss seq 0
+    // and come back with a gap in their replicated log.
+    c.crash_meta(3);
+    c.crash_meta(4);
+    c.write_file("/keep", b"committed before the gap").unwrap();
+    c.recover_meta(3);
+    c.recover_meta(4);
+
+    // The two backups that hold seq 0 crash. The live set is exactly the
+    // primary plus the two gap-holding backups.
+    c.crash_meta(1);
+    c.crash_meta(2);
+
+    let victim = b"a committed write that must survive one meta failure".to_vec();
+    let committed = c.write_file("/victim", &victim).is_ok();
+
+    // Every other metadata node recovers and then the primary itself crashes.
+    // Exactly one metadata node is down at the end, which is within the
+    // tolerance of a three node quorum.
+    c.recover_meta(1);
+    c.recover_meta(2);
+    c.crash_meta(0);
+
+    // A write the client saw as Ok must still be readable.
+    if committed {
+        let got = c
+            .read_file("/victim")
+            .expect("a committed write must survive one concurrent meta failure");
+        assert_eq!(got, victim);
+    }
+    // The first write committed on a healthy full quorum and must always survive.
+    assert_eq!(
+        c.read_file("/keep").unwrap(),
+        b"committed before the gap".to_vec()
+    );
+}
+
+#[test]
 fn metadata_survives_primary_crash() {
     let mut c = Cluster::new(Options::default(), 8);
     c.mkdir("/m").unwrap();

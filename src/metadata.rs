@@ -63,7 +63,9 @@ fn is_under(path: &str, ancestor: &str) -> bool {
     path.starts_with(&format!("{ancestor}/"))
 }
 
-/// A committed-state snapshot used when promoting a new primary.
+/// A committed-state snapshot used when promoting a new primary and when
+/// catching backups up after role changes.
+#[derive(Clone)]
 pub struct MetaSnapshot {
     files: BTreeMap<String, Manifest>,
     dirs: BTreeSet<String>,
@@ -445,12 +447,24 @@ impl MetaNode {
             }
             Message::MetaReplicate { seq, op } => {
                 self.buffer.insert(seq, op);
+                // Apply as far through the log as the buffer allows, then
+                // acknowledge only the sequence numbers that are now durably
+                // applied here. Acknowledging an op that is merely buffered
+                // (because an earlier op is missing) would let a commit
+                // quorum form without a second node holding the op, so one
+                // primary crash could lose a committed write.
+                let mut applied = Vec::new();
                 while let Some(op) = self.buffer.remove(&self.applied_seq) {
+                    let s = self.applied_seq;
                     self.apply(&op);
-                    self.log.push((self.applied_seq, op));
+                    self.log.push((s, op));
                     self.applied_seq += 1;
+                    applied.push(s);
                 }
-                vec![(me, from, Message::MetaReplicateAck { seq })]
+                applied
+                    .into_iter()
+                    .map(|s| (me, from, Message::MetaReplicateAck { seq: s }))
+                    .collect()
             }
             Message::MetaReplicateAck { seq } => {
                 let ready = if let Some(p) = self.pending.get_mut(&seq) {

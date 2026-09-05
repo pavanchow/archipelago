@@ -7,7 +7,7 @@
 //! verified against the content hash.
 
 use crate::encode::{Decoder, Encoder};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::hash::{sha256, Hash};
 
 /// A content-addressed block of bytes.
@@ -45,7 +45,14 @@ impl Manifest {
     pub fn decode(d: &mut Decoder<'_>) -> Result<Manifest> {
         let size = d.get_uvarint()?;
         let content_hash = d.get_hash()?;
-        let n = d.get_uvarint()? as usize;
+        let n = d.get_uvarint()?;
+        // Every chunk is a 32 byte hash, so a count larger than the remaining
+        // bytes can hold is malformed. Bounding it here keeps a hostile count
+        // from requesting an absurd allocation.
+        if n > (d.remaining() / 32) as u64 {
+            return Err(Error::Decode("manifest chunk count out of range".into()));
+        }
+        let n = n as usize;
         let mut chunks = Vec::with_capacity(n);
         for _ in 0..n {
             chunks.push(d.get_hash()?);
@@ -153,5 +160,26 @@ mod tests {
         let (_c, m) = chunk_bytes(&[0u8; 64 * 3], 64);
         assert_eq!(m.chunks[0], m.chunks[1]);
         assert_eq!(m.chunks[1], m.chunks[2]);
+    }
+
+    #[test]
+    fn hostile_chunk_count_is_error_not_panic() {
+        // A manifest header whose chunk count varint decodes to u64::MAX must
+        // be rejected, not turned into an absurd allocation.
+        let mut bytes = vec![0u8]; // size
+        bytes.extend_from_slice(&[0u8; 32]); // content hash
+        bytes.extend_from_slice(&[0xffu8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]);
+        let mut d = Decoder::new(&bytes);
+        assert!(Manifest::decode(&mut d).is_err());
+
+        // A truncated but sane-looking count is also an error.
+        let (c, m) = chunk_bytes(&[1u8; 100], 64);
+        let mut e = Encoder::new();
+        m.encode(&mut e);
+        let mut bytes = e.finish();
+        bytes.truncate(bytes.len() - 1);
+        let mut d = Decoder::new(&bytes);
+        assert!(Manifest::decode(&mut d).is_err());
+        let _ = c;
     }
 }

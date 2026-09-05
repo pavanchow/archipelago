@@ -22,15 +22,18 @@ pub fn encode_uvarint(mut value: u64, out: &mut Vec<u8>) {
 
 /// Decode a LEB128 varint from the front of `buf`.
 ///
-/// Returns the value and the number of bytes consumed.
+/// Returns the value and the number of bytes consumed. Encodings that would
+/// lose bits above bit 63 (more than ten bytes, or a tenth group above one)
+/// are rejected instead of silently wrapping.
 pub fn decode_uvarint(buf: &[u8]) -> Result<(u64, usize)> {
     let mut result: u64 = 0;
     let mut shift = 0u32;
     for (i, &byte) in buf.iter().enumerate() {
-        if shift >= 64 {
-            return Err(Error::Decode("varint too long".into()));
+        let group = u64::from(byte & 0x7f);
+        if shift >= 64 || (group << shift) >> shift != group {
+            return Err(Error::Decode("varint exceeds 64 bits".into()));
         }
-        result |= u64::from(byte & 0x7f) << shift;
+        result |= group << shift;
         if byte & 0x80 == 0 {
             return Ok((result, i + 1));
         }
@@ -74,5 +77,22 @@ mod tests {
     fn truncated_is_error() {
         assert!(decode_uvarint(&[0x80]).is_err());
         assert!(decode_uvarint(&[]).is_err());
+    }
+
+    #[test]
+    fn overflowing_is_error() {
+        // Ten bytes is the maximum for u64, but the tenth group may only be 0
+        // or 1. Anything larger would lose bits.
+        let ok_max = [0xffu8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01];
+        assert_eq!(decode_uvarint(&ok_max).unwrap().0, u64::MAX);
+        let ok_low = [0xffu8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00];
+        assert_eq!(decode_uvarint(&ok_low).unwrap().0, (1u64 << 63) - 1);
+        let too_big = [0xffu8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x02];
+        assert!(decode_uvarint(&too_big).is_err());
+        let much_too_big = [0xffu8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f];
+        assert!(decode_uvarint(&much_too_big).is_err());
+        // Eleven bytes can never fit.
+        let too_long = [0xffu8; 11];
+        assert!(decode_uvarint(&too_long).is_err());
     }
 }

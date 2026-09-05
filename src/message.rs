@@ -437,7 +437,14 @@ impl Message {
             }),
             7 => {
                 let node = d.get_uvarint()? as u32;
-                let n = d.get_uvarint()? as usize;
+                let n = d.get_uvarint()?;
+                // Each chunk is a 32 byte hash, so a count larger than the
+                // remaining bytes can hold is malformed. Bounding it keeps a
+                // hostile count from requesting an absurd allocation.
+                if n > (d.remaining() / 32) as u64 {
+                    return Err(Error::Decode("heartbeat chunk count out of range".into()));
+                }
+                let n = n as usize;
                 let mut chunks = Vec::with_capacity(n);
                 for _ in 0..n {
                     chunks.push(d.get_hash()?);
@@ -541,7 +548,15 @@ fn decode_query_result(d: &mut Decoder<'_>) -> Result<QueryResult> {
             Ok(QueryResult::Manifest(m))
         }
         1 => {
-            let n = d.get_uvarint()? as usize;
+            let n = d.get_uvarint()?;
+            // Each entry needs at least three bytes on the wire (name length,
+            // the is_dir byte, and the size varint), so a count larger than
+            // half the remaining bytes is malformed. Bounding it keeps a
+            // hostile count from requesting an absurd allocation.
+            if n > (d.remaining() / 2) as u64 {
+                return Err(Error::Decode("listing entry count out of range".into()));
+            }
+            let n = n as usize;
             let mut entries = Vec::with_capacity(n);
             for _ in 0..n {
                 let name = d.get_str()?;
@@ -685,5 +700,44 @@ mod tests {
         assert_eq!(from, NodeId::Client);
         assert_eq!(to, NodeId::Storage(3));
         assert_eq!(back, msg);
+    }
+
+    #[test]
+    fn hostile_counts_are_errors_not_panics() {
+        // A heartbeat whose chunk count varint decodes to u64::MAX must be
+        // rejected, not turned into an absurd allocation.
+        let mut bytes = vec![7u8];
+        bytes.push(0);
+        bytes.extend_from_slice(&[0xffu8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]);
+        assert!(Message::decode(&bytes).is_err());
+
+        // A listing whose entry count varint decodes to u64::MAX as well.
+        let mut bytes = vec![13u8];
+        bytes.extend_from_slice(&[0u8]); // req_id
+        bytes.push(1); // QueryResult::Listing
+        bytes.extend_from_slice(&[0xffu8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]);
+        assert!(Message::decode(&bytes).is_err());
+    }
+
+    #[test]
+    fn random_envelopes_never_panic() {
+        // xorshift-driven malformed envelopes. Every decode must return an
+        // outcome rather than panic, whatever the bytes contain.
+        let mut state = 0xfeed_faceu64;
+        for _ in 0..5000 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            let len = (state % 96) as usize;
+            let buf: Vec<u8> = (0..len)
+                .map(|_| {
+                    state ^= state << 13;
+                    state ^= state >> 7;
+                    state ^= state << 17;
+                    (state >> 16) as u8
+                })
+                .collect();
+            let _ = decode_envelope(&buf);
+        }
     }
 }

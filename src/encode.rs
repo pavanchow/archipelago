@@ -88,12 +88,19 @@ impl<'a> Decoder<'a> {
 
     /// Read a length-prefixed byte slice into an owned vector.
     pub fn get_bytes(&mut self) -> Result<Vec<u8>> {
+        // A malformed length prefix can claim nearly 2^64 bytes. Compute the
+        // end offset without overflow so bad input is a Decode error, never a
+        // panic.
         let len = self.get_uvarint()? as usize;
-        if self.pos + len > self.buf.len() {
+        let end = self
+            .pos
+            .checked_add(len)
+            .ok_or_else(|| Error::Decode("byte length out of range".into()))?;
+        if end > self.buf.len() {
             return Err(Error::Decode("eof reading bytes".into()));
         }
-        let out = self.buf[self.pos..self.pos + len].to_vec();
-        self.pos += len;
+        let out = self.buf[self.pos..end].to_vec();
+        self.pos = end;
         Ok(out)
     }
 
@@ -148,5 +155,44 @@ mod tests {
         bytes.pop();
         let mut d = Decoder::new(&bytes);
         assert!(d.get_bytes().is_err());
+    }
+
+    #[test]
+    fn hostile_length_is_error_not_panic() {
+        // Ten byte varint whose top group claims bits above 63: the length
+        // decodes to u64::MAX. The decoder must answer with an error rather
+        // than overflow.
+        let hostile = [0xffu8, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f];
+        assert!(decode_uvarint(&hostile).is_err());
+        let mut d = Decoder::new(&hostile);
+        assert!(d.get_bytes().is_err());
+        assert!(d.get_str().is_err());
+    }
+
+    #[test]
+    fn random_malformed_never_panics() {
+        // xorshift-driven malformed buffers. Every decode must return, either
+        // Ok or Err, and must never panic.
+        let mut state = 0xdead_beefu64;
+        for _ in 0..5000 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            let len = (state % 64) as usize;
+            let buf: Vec<u8> = (0..len)
+                .map(|_| {
+                    state ^= state << 13;
+                    state ^= state >> 7;
+                    state ^= state << 17;
+                    (state >> 24) as u8
+                })
+                .collect();
+            let mut d = Decoder::new(&buf);
+            let _ = d.get_u8();
+            let _ = d.get_uvarint();
+            let _ = d.get_bytes();
+            let _ = d.get_str();
+            let _ = d.get_hash();
+        }
     }
 }
