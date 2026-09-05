@@ -2,11 +2,766 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>archipelago</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archipelago — a distributed file system you can watch</title>
+<style>
+:root {
+  --bg: #fbfbfd;
+  --bg-elevated: #ffffff;
+  --text: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --border: rgba(0,0,0,0.10);
+  --border-strong: rgba(0,0,0,0.16);
+  --shadow: 0 4px 24px rgba(0,0,0,0.06);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.10);
+  --accent: #0071e3;
+  --accent-soft: rgba(0,113,227,0.10);
+  --good: #1a8a3f;
+  --good-soft: rgba(26,138,63,0.12);
+  --warn: #b25000;
+  --warn-soft: rgba(178,80,0,0.12);
+  --bad: #c8102e;
+  --bad-soft: rgba(200,16,46,0.12);
+  --node-bg: #ffffff;
+  --tile-empty: rgba(0,0,0,0.05);
+  --radius: 20px;
+  --radius-sm: 12px;
+  --maxw: 1080px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --bg-elevated: #1c1c1e;
+    --text: #f5f5f7;
+    --text-secondary: #a1a1a6;
+    --border: rgba(255,255,255,0.12);
+    --border-strong: rgba(255,255,255,0.20);
+    --shadow: 0 4px 24px rgba(0,0,0,0.5);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.6);
+    --accent: #2997ff;
+    --accent-soft: rgba(41,151,255,0.16);
+    --good: #4cd964;
+    --good-soft: rgba(76,217,100,0.16);
+    --warn: #ff9f0a;
+    --warn-soft: rgba(255,159,10,0.16);
+    --bad: #ff6961;
+    --bad-soft: rgba(255,105,97,0.16);
+    --node-bg: #1c1c1e;
+    --tile-empty: rgba(255,255,255,0.07);
+  }
+  body { background: var(--bg); color: var(--text); }
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+/* Hero */
+.hero { text-align: center; padding: 96px 24px 56px; }
+.hero .mark {
+  display: inline-flex; gap: 10px; align-items: center;
+  font-size: 13px; letter-spacing: 0.02em; color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; margin-bottom: 28px;
+}
+.hero h1 {
+  font-size: clamp(44px, 8vw, 88px); line-height: 1.02; margin: 0 0 18px;
+  letter-spacing: -0.03em; font-weight: 700;
+  background: linear-gradient(120deg, var(--text), var(--text-secondary));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero .tag { font-size: clamp(20px, 3.4vw, 30px); color: var(--text); font-weight: 500; margin: 0 auto 26px; max-width: 760px; }
+.hero .lede { font-size: 18px; color: var(--text-secondary); max-width: 720px; margin: 0 auto 34px; }
+.cta { display: inline-flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+.btn {
+  border: none; cursor: pointer; font: inherit; font-weight: 500;
+  padding: 13px 24px; border-radius: 999px; transition: transform .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: var(--shadow); text-decoration: none; }
+.btn-ghost { background: transparent; color: var(--accent); border: 1px solid var(--border-strong); }
+.btn-ghost:hover { background: var(--accent-soft); text-decoration: none; }
+
+/* Gap cards */
+.gap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 8px 0 40px; }
+.gap .card {
+  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 26px; box-shadow: var(--shadow);
+}
+.gap .card h3 { margin: 0 0 8px; font-size: 17px; }
+.gap .card p { margin: 0; color: var(--text-secondary); font-size: 15px; }
+.gap .card .k { font-size: 13px; font-weight: 600; color: var(--accent); letter-spacing: .02em; text-transform: uppercase; }
+
+/* Section */
+section { padding: 40px 0; }
+.section-title { font-size: clamp(28px, 4.4vw, 40px); letter-spacing: -0.02em; margin: 0 0 10px; font-weight: 650; }
+.section-sub { font-size: 18px; color: var(--text-secondary); margin: 0 0 28px; max-width: 760px; }
+h2, h3, h4 { letter-spacing: -0.02em; }
+
+/* Simulator */
+.sim {
+  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg); padding: 26px; margin-top: 8px;
+}
+.controls { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; margin-bottom: 22px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; }
+.field input, .field select {
+  font: inherit; padding: 9px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); min-width: 130px;
+}
+.field input:focus, .field select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.btnrow { display: flex; flex-wrap: wrap; gap: 10px; }
+.sbtn {
+  font: inherit; font-weight: 500; font-size: 14px; cursor: pointer;
+  padding: 9px 16px; border-radius: 999px; border: 1px solid var(--border-strong);
+  background: var(--bg); color: var(--text); transition: all .15s ease;
+}
+.sbtn:hover { border-color: var(--accent); color: var(--accent); }
+.sbtn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.sbtn.primary:hover { transform: translateY(-1px); color: #fff; }
+.sbtn.warn { color: var(--warn); border-color: var(--warn); }
+.sbtn.warn:hover { background: var(--warn-soft); }
+.sbtn.danger { color: var(--bad); border-color: var(--bad); }
+.sbtn.danger:hover { background: var(--bad-soft); }
+
+/* Nodes grid */
+.nodes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 8px 0 4px; }
+.node {
+  background: var(--node-bg); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 14px; cursor: pointer; transition: all .15s ease; position: relative; overflow: hidden;
+}
+.node:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow); }
+.node.down { opacity: .55; border-style: dashed; border-color: var(--bad); background: var(--bad-soft); }
+.node.partA { box-shadow: inset 3px 0 0 var(--accent); }
+.node.partB { box-shadow: inset 3px 0 0 var(--warn); }
+.node.serving { border-color: var(--good); box-shadow: 0 0 0 2px var(--good-soft); }
+.node .nhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.node .nname { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 7px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); }
+.node.down .dot { background: var(--bad); }
+.node .nload { font-size: 11px; color: var(--text-secondary); }
+.pill { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 999px; }
+.pill.a { background: var(--accent-soft); color: var(--accent); }
+.pill.b { background: var(--warn-soft); color: var(--warn); }
+.tiles { display: flex; flex-wrap: wrap; gap: 5px; min-height: 26px; }
+.tile {
+  width: 24px; height: 24px; border-radius: 6px; position: relative;
+  display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff;
+  transition: transform .15s ease; text-shadow: 0 1px 2px rgba(0,0,0,.4);
+}
+.tile:hover { transform: scale(1.15); }
+.tile.under { outline: 2px solid var(--warn); outline-offset: 1px; animation: pulse 1.1s infinite; }
+.tile.lost { outline: 2px solid var(--bad); outline-offset: 1px; }
+@keyframes pulse { 0%,100%{ box-shadow: 0 0 0 0 var(--warn-soft);} 50%{ box-shadow: 0 0 0 5px transparent;} }
+.tiles .empty { color: var(--text-secondary); font-size: 11px; }
+
+/* Legend + meters */
+.legend { display: flex; flex-wrap: wrap; gap: 18px 26px; margin: 20px 0 6px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-secondary); }
+.legend .item { display: flex; align-items: center; gap: 8px; }
+.legend .sw { width: 16px; height: 16px; border-radius: 5px; }
+.badge { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--tile-empty); padding: 2px 8px; border-radius: 6px; }
+
+.quorum { display: flex; align-items: center; gap: 10px; }
+.qbar { flex: 1; height: 8px; background: var(--tile-empty); border-radius: 999px; overflow: hidden; }
+.qfill { height: 100%; background: var(--good); width: 0; transition: width .4s ease; }
+
+/* Log / console */
+.console {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 14px 16px; margin-top: 20px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px; line-height: 1.7; max-height: 240px; overflow-y: auto;
+}
+.console .line { display: flex; gap: 10px; }
+.console .t { color: var(--text-secondary); flex: none; }
+.log-info { color: var(--text); }
+.log-good { color: var(--good); }
+.log-warn { color: var(--warn); }
+.log-bad { color: var(--bad); }
+.log-accent { color: var(--accent); }
+
+/* Files table */
+.files { margin-top: 20px; }
+.files table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.files th, .files td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); }
+.files th { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: var(--text-secondary); font-weight: 600; }
+.status-ok { color: var(--good); font-weight: 600; }
+.status-under { color: var(--warn); font-weight: 600; }
+.status-lost { color: var(--bad); font-weight: 600; }
+.fchunks { display: flex; gap: 4px; flex-wrap: wrap; }
+.mini { width: 16px; height: 16px; border-radius: 4px; }
+
+/* Prose sections */
+.prose { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+.prose .card {
+  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 28px; box-shadow: var(--shadow);
+}
+.prose .card h3 { margin: 0 0 10px; font-size: 20px; }
+.prose .card p { margin: 0 0 12px; color: var(--text-secondary); font-size: 15.5px; }
+.prose .card p:last-child { margin-bottom: 0; }
+.prose .card strong { color: var(--text); font-weight: 600; }
+
+/* How to use */
+.howto { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 32px; box-shadow: var(--shadow); }
+.howto ol { margin: 0; padding-left: 22px; }
+.howto li { margin-bottom: 14px; color: var(--text-secondary); font-size: 15.5px; }
+.howto li strong { color: var(--text); }
+.howto h3 { margin: 26px 0 12px; font-size: 19px; }
+.tour { background: var(--accent-soft); border-radius: var(--radius-sm); padding: 22px 24px; margin-top: 8px; }
+.tour ol { padding-left: 20px; }
+.tour li { color: var(--text); }
+
+footer { text-align: center; padding: 60px 24px; color: var(--text-secondary); font-size: 14px; border-top: 1px solid var(--border); margin-top: 40px; }
+
+@media (max-width: 780px) {
+  .gap, .prose { grid-template-columns: 1fr; }
+  .hero { padding: 64px 20px 40px; }
+  .controls { gap: 14px; }
+  .field input, .field select { min-width: 0; width: 100%; }
+  .field { flex: 1 1 140px; }
+}
+</style>
 </head>
 <body>
-<h1>archipelago</h1>
-<p>Site coming soon.</p>
-<p><a href="https://github.com/pavanchow/archipelago">View repository</a></p>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="mark">◆ Archipelago · a from-scratch distributed file system</span>
+    <h1>Archipelago</h1>
+    <p class="tag">Chunk it, hash it, spread it across nodes, and survive losing them. All in one process you can watch.</p>
+    <p class="lede">
+      A real distributed file system with content-addressed chunking, replication, quorum writes, and fault tolerance,
+      with <strong>zero dependencies</strong>. The gap it fills is simple. Everywhere else you need a real multi-machine
+      cluster before you can see any of this behave. Archipelago runs the whole cluster as one deterministic simulation,
+      so a person or an AI agent can write a file, kill a node, partition the network, and watch quorum and content-hash
+      verification decide every read.
+    </p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#playground">Open the playground</a>
+      <a class="btn btn-ghost" href="https://github.com/pavanchow/archipelago">View on GitHub</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="gap">
+    <div class="card">
+      <div class="k">The gap</div>
+      <h3>See it without a cluster</h3>
+      <p>Chunking, replication, quorum, and re-replication normally need many machines to observe. Here they run as a single deterministic process you can step through.</p>
+    </div>
+    <div class="card">
+      <div class="k">What is different</div>
+      <h3>Watch failure decide reads</h3>
+      <p>Split a file into chunks, spread replicas across nodes, kill one and watch chunks re-replicate. Partition the network and see quorum and hash checks resolve each read.</p>
+    </div>
+    <div class="card">
+      <div class="k">The promise</div>
+      <h3>Never returns corrupt bytes</h3>
+      <p>Every chunk is verified against its SHA-256 content hash on read. A read either returns the exact bytes or fails loudly. It never hands back silent corruption.</p>
+    </div>
+  </div>
+
+  <!-- SIMULATOR -->
+  <section id="playground">
+    <h2 class="section-title">Live simulation</h2>
+    <p class="section-sub">A teaching-accurate reimplementation of the cluster model, running entirely in your browser. No servers, no network calls.</p>
+
+    <div class="sim">
+      <div class="controls">
+        <div class="field">
+          <label for="fpath">File path</label>
+          <input id="fpath" type="text" value="/photos/sunset.raw" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="fsize">Size (chunks)</label>
+          <input id="fsize" type="number" min="1" max="12" value="4">
+        </div>
+        <div class="field">
+          <label for="sample">Sample file</label>
+          <select id="sample">
+            <option value="">Choose…</option>
+            <option value="/photos/sunset.raw|4">/photos/sunset.raw · 4</option>
+            <option value="/db/ledger.db|7">/db/ledger.db · 7</option>
+            <option value="/notes/todo.md|1">/notes/todo.md · 1</option>
+            <option value="/video/clip.mov|10">/video/clip.mov · 10</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="rfactor">Replication R</label>
+          <select id="rfactor">
+            <option value="2">R = 2</option>
+            <option value="3" selected>R = 3</option>
+          </select>
+        </div>
+        <div class="btnrow">
+          <button class="sbtn primary" id="btnWrite">Write</button>
+          <button class="sbtn" id="btnRead">Read</button>
+        </div>
+      </div>
+
+      <div class="btnrow" style="margin-bottom:20px">
+        <button class="sbtn warn" id="btnReplicate">Re-replicate</button>
+        <button class="sbtn" id="btnPartition">Partition network</button>
+        <button class="sbtn" id="btnHealAll">Heal all</button>
+        <button class="sbtn" id="btnRandom">Random workload</button>
+        <button class="sbtn danger" id="btnReset">Reset</button>
+      </div>
+
+      <div class="nodes" id="nodes"></div>
+
+      <div class="quorum" style="margin-top:20px">
+        <span style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.03em">Last write quorum</span>
+        <div class="qbar"><div class="qfill" id="qfill"></div></div>
+        <span class="badge" id="qtext">idle</span>
+      </div>
+
+      <div class="legend">
+        <div class="item"><span class="sw" style="background:var(--accent)"></span> Chunk color = chunk identity (replicas share it)</div>
+        <div class="item"><span class="badge">a1b2c3…</span> content hash (SHA-256)</div>
+        <div class="item"><span class="dot"></span> node healthy</div>
+        <div class="item"><span class="dot" style="background:var(--bad)"></span> node down</div>
+        <div class="item"><span class="sw" style="background:transparent;outline:2px solid var(--warn)"></span> under-replicated</div>
+        <div class="item"><span class="sw" style="background:transparent;outline:2px solid var(--bad)"></span> chunk lost</div>
+      </div>
+
+      <div class="files" id="files"></div>
+
+      <div class="console" id="console"></div>
+    </div>
+  </section>
+
+  <!-- PROSE -->
+  <section>
+    <h2 class="section-title">How it works</h2>
+    <p class="section-sub">The concepts the simulation is built on, in plain terms.</p>
+    <div class="prose">
+      <div class="card">
+        <h3>Architecture</h3>
+        <p>A <strong>metadata service</strong> maps every file path to its ordered list of chunk hashes and tracks the directory tree. A set of <strong>storage nodes</strong> hold the chunks themselves. A client talks to both. It asks metadata where a file's chunks live, then reads or writes those chunks on the storage nodes directly.</p>
+        <p>Nothing here needs a second machine. The metadata service, the nodes, and the message scheduler all run inside one process.</p>
+      </div>
+      <div class="card">
+        <h3>Chunking and content addressing</h3>
+        <p>A file is split into <strong>fixed-size chunks</strong>. Each chunk is named by the <strong>SHA-256 hash of its own bytes</strong>, so identical content is stored once and every reference to a chunk carries a built-in integrity check.</p>
+        <p>The metadata for a file is just the ordered list of those hashes. To rebuild the file you fetch each chunk by hash and concatenate them back in order.</p>
+      </div>
+      <div class="card">
+        <h3>Replication and quorum</h3>
+        <p>Every chunk is copied onto <strong>R storage nodes</strong> chosen by <strong>rendezvous hashing</strong>. Each node scores the chunk, and the top R scorers hold it. Losing one node moves only that node's chunks, not the whole placement.</p>
+        <p>A write is <strong>durable once a quorum of replicas acknowledge</strong>. Reads assemble the file from any live replica of each chunk, so a single slow or dead node never blocks a read.</p>
+      </div>
+      <div class="card">
+        <h3>The durability guarantee</h3>
+        <p>There is <strong>no data loss with fewer than R node failures</strong>. Lose one or two nodes with R at three and every chunk still has a live copy. Under-replicated chunks <strong>re-replicate automatically</strong> once healthy capacity is available, restoring the full replica count.</p>
+        <p>Only when all R replicas of a specific chunk are gone is that file reported <strong>unavailable</strong>. It is never silently returned as corrupt bytes.</p>
+      </div>
+      <div class="card">
+        <h3>Deterministic simulation</h3>
+        <p>The cluster runs on a <strong>seeded message scheduler</strong> that can delay, reorder, drop, and partition messages. The same seed produces the same run every time.</p>
+        <p>That is what makes failures testable. A partition or a dropped acknowledgement is not a flaky accident here. It is a reproducible event you can replay and reason about.</p>
+      </div>
+      <div class="card">
+        <h3>Why that matters</h3>
+        <p>Distributed bugs hide in timing. In a real cluster they surface once in a thousand runs and vanish when you look. A deterministic in-process model turns those rare races into <strong>exact, repeatable scenarios</strong>.</p>
+        <p>For an AI agent this is a safe sandbox to reason about consistency and fault tolerance without provisioning a single machine.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW TO USE -->
+  <section>
+    <h2 class="section-title">How to use this playground</h2>
+    <p class="section-sub">Every control, what it does, and what to watch for.</p>
+    <div class="howto">
+      <ol>
+        <li><strong>Write.</strong> Type a path and a size in chunks, or pick a sample file, then press Write. Watch the file split into chunks. Each chunk gets a content hash and lands on R distinct nodes chosen by hashing. Replicas of the same chunk share one color across nodes. Watch for the quorum meter filling as replicas acknowledge.</li>
+        <li><strong>Read.</strong> Type a path already written, then press Read. The client gathers each chunk from a live replica, verifies its content hash, and reassembles the file in order. The console names which node served each chunk. Watch for served nodes lighting green and the hash check passing on every chunk.</li>
+        <li><strong>Fail node.</strong> Click any node to crash it. It goes dark and dashed. Its chunks are now missing a replica, so those tiles are highlighted <strong>under-replicated</strong> on the nodes that still hold them. Watch for the file status turning amber in the table.</li>
+        <li><strong>Heal.</strong> Click a downed node again, or press Heal all, to bring nodes back up. A recovered node rejoins and becomes eligible to hold replicas again.</li>
+        <li><strong>Partition network.</strong> Press it to split the cluster into two groups, A and B. The client sits in group A and can only reach group A nodes. Chunks whose only live replicas are stranded in group B become unreachable for reads until the partition heals. Press again to heal the partition.</li>
+        <li><strong>Re-replicate.</strong> Press it to run the repair pass. For every under-replicated chunk it copies a fresh replica onto a healthy, reachable node until the chunk is back to R copies. Watch under-replicated tiles lose their amber outline as R is restored.</li>
+        <li><strong>Replication R.</strong> Choose R equals 2 or 3. This sets how many replicas each new chunk gets and how many losses a chunk can survive. It applies to writes made after you change it.</li>
+        <li><strong>Random workload.</strong> Writes a few random files at once so you can see many chunks spread across the cluster quickly.</li>
+        <li><strong>Reset.</strong> Clears all files and brings every node back to a clean, healthy, unpartitioned state.</li>
+      </ol>
+
+      <h3>Guided tour</h3>
+      <div class="tour">
+        <ol>
+          <li>Write <strong>/photos/sunset.raw</strong> at size 4 with R equals 3. See four chunks, each on three nodes.</li>
+          <li>Read it back. Every chunk is served from a live replica and its hash verifies. Status stays green.</li>
+          <li>Click a node that holds one of those chunks. That chunk shows under-replicated. The file goes amber.</li>
+          <li>Press Re-replicate. A new copy is placed on a healthy node and R is restored. The amber clears.</li>
+          <li>Read again. Still green, still verified. That is the durability guarantee in action.</li>
+          <li>Now fail R nodes that all hold the same chunk. That chunk has zero live replicas. Read the file and see it reported <strong>unavailable</strong>, not corrupt.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <p>Archipelago · a from-scratch distributed file system · <a href="https://github.com/pavanchow/archipelago">github.com/pavanchow/archipelago</a></p>
+</footer>
+
+<script>
+"use strict";
+
+/* ---------- SHA-256 (compact, correct, used for real content addressing) ---------- */
+function sha256(ascii) {
+  function rotr(n,x){ return (x>>>n)|(x<<(32-n)); }
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  let h=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const bytes=[]; for(let i=0;i<ascii.length;i++){ let c=ascii.charCodeAt(i);
+    if(c<128) bytes.push(c); else if(c<2048){ bytes.push(192|(c>>6),128|(c&63)); }
+    else { bytes.push(224|(c>>12),128|((c>>6)&63),128|(c&63)); } }
+  const l=bytes.length; bytes.push(0x80); while(bytes.length%64!==56) bytes.push(0);
+  const bl=l*8; for(let i=7;i>=0;i--) bytes.push((bl/Math.pow(2,i*8))&255);
+  for(let j=0;j<bytes.length;j+=64){
+    const w=new Array(64);
+    for(let i=0;i<16;i++) w[i]=(bytes[j+i*4]<<24)|(bytes[j+i*4+1]<<16)|(bytes[j+i*4+2]<<8)|(bytes[j+i*4+3]);
+    for(let i=16;i<64;i++){
+      const s0=rotr(7,w[i-15])^rotr(18,w[i-15])^(w[i-15]>>>3);
+      const s1=rotr(17,w[i-2])^rotr(19,w[i-2])^(w[i-2]>>>10);
+      w[i]=(w[i-16]+s0+w[i-7]+s1)|0;
+    }
+    let[a,b,c,d,e,f,g,hh]=h;
+    for(let i=0;i<64;i++){
+      const S1=rotr(6,e)^rotr(11,e)^rotr(25,e);
+      const ch=(e&f)^(~e&g);
+      const t1=(hh+S1+ch+K[i]+w[i])|0;
+      const S0=rotr(2,a)^rotr(13,a)^rotr(22,a);
+      const maj=(a&b)^(a&c)^(b&c);
+      const t2=(S0+maj)|0;
+      hh=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0;
+    }
+    h=[(h[0]+a)|0,(h[1]+b)|0,(h[2]+c)|0,(h[3]+d)|0,(h[4]+e)|0,(h[5]+f)|0,(h[6]+g)|0,(h[7]+hh)|0];
+  }
+  return h.map(x=>((x>>>0).toString(16).padStart(8,'0'))).join('');
+}
+
+/* ---------- 32-bit hash for rendezvous placement ---------- */
+function h32(str){ let h=2166136261>>>0; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+
+/* ---------- model ---------- */
+const NODE_COUNT = 6;
+const state = {
+  nodes: [],           // {id,name,up,part} part in {'A','B',null}
+  files: {},           // path -> {path, chunks:[{id,hash,color,index,replicas:Set(nodeId)}]}
+  partitioned: false,
+  R: 3,
+  chunkSeq: 0
+};
+
+function writeQuorum(R){ return Math.ceil((R+1)/2); } // R2->2, R3->2
+
+function initNodes(){
+  state.nodes = [];
+  for(let i=0;i<NODE_COUNT;i++){
+    state.nodes.push({ id:i, name:"node-"+i, up:true, part:null });
+  }
+}
+function liveNodes(){ return state.nodes.filter(n=>n.up); }
+// reachable from the client (client lives in partition group A)
+function reachableNodes(){
+  return state.nodes.filter(n=>n.up && (!state.partitioned || n.part==='A'));
+}
+
+// rendezvous hashing: pick top-k by score among candidate node ids
+function placeChunk(chunkHash, candidateIds, k){
+  const scored = candidateIds.map(id=>({id, s:h32(chunkHash+":"+id)}));
+  scored.sort((a,b)=> b.s-a.s);
+  return scored.slice(0,k).map(o=>o.id);
+}
+
+function chunkColor(hash){
+  const hue = h32(hash) % 360;
+  return `hsl(${hue} 68% 52%)`;
+}
+
+/* ---------- operations ---------- */
+function opWrite(path, sizeChunks){
+  const R = state.R;
+  const reachable = reachableNodes();
+  if(reachable.length < R){
+    log(`Write ${path} rejected. Only ${reachable.length} reachable node(s), need R=${R}.`, "bad");
+    return;
+  }
+  const wq = writeQuorum(R);
+  const chunks=[];
+  let totalAcks=0, totalTarget=0;
+  for(let i=0;i<sizeChunks;i++){
+    // content bytes are deterministic from path + index (so identical content addresses match)
+    const content = `${path}::chunk::${i}::v1`;
+    const hash = sha256(content);
+    const candidates = reachable.map(n=>n.id);
+    const targets = placeChunk(hash, candidates, R);
+    // quorum: count acknowledgements (all reachable targets ack in this sim)
+    const acks = targets.length;
+    totalAcks += Math.min(acks, wq); totalTarget += wq;
+    const replicas = new Set(targets);
+    const c = { id: "c"+(state.chunkSeq++), hash, content, color: chunkColor(hash), index:i, replicas };
+    chunks.push(c);
+    log(`chunk ${i} [${hash.slice(0,8)}] → ${targets.map(t=>"node-"+t).join(", ")} (${acks}/${wq} quorum)`, acks>=wq?"good":"warn");
+  }
+  state.files[path] = { path, chunks };
+  const qpct = Math.round((totalAcks/Math.max(totalTarget,1))*100);
+  setQuorum(qpct, `${sizeChunks} chunk(s) · quorum ${wq}/${R} met`);
+  log(`WRITE ${path}: ${sizeChunks} chunk(s) × R=${R}, durable.`, "accent");
+  render();
+}
+
+function chunkStatus(c){
+  // replicas that are live AND reachable
+  const live = [...c.replicas].filter(id=>state.nodes[id].up);
+  const reachable = live.filter(id=> !state.partitioned || state.nodes[id].part==='A');
+  if(live.length===0) return {kind:"lost", live, reachable};
+  if(reachable.length===0) return {kind:"unreachable", live, reachable};
+  if(live.length < state.R) return {kind:"under", live, reachable};
+  return {kind:"ok", live, reachable};
+}
+
+function fileStatus(f){
+  let worst="ok";
+  for(const c of f.chunks){
+    const s=chunkStatus(c).kind;
+    if(s==="lost"){ worst="lost"; break; }
+    if(s==="unreachable"){ worst = worst==="lost"?"lost":"unreachable"; }
+    else if(s==="under" && worst==="ok"){ worst="under"; }
+  }
+  return worst;
+}
+
+function opRead(path){
+  const f = state.files[path];
+  if(!f){ log(`Read ${path}: no such file.`, "bad"); return; }
+  clearServing();
+  log(`READ ${path}: gathering ${f.chunks.length} chunk(s)…`, "accent");
+  let ok=true; const assembled=[];
+  for(const c of f.chunks){
+    const s = chunkStatus(c);
+    if(s.kind==="lost"){
+      log(`  chunk ${c.index} [${c.hash.slice(0,8)}] UNAVAILABLE — all ${state.R} replicas lost.`, "bad");
+      ok=false; continue;
+    }
+    if(s.kind==="unreachable"){
+      log(`  chunk ${c.index} [${c.hash.slice(0,8)}] UNREACHABLE — live replicas stranded across partition.`, "bad");
+      ok=false; continue;
+    }
+    const serverId = s.reachable[0];
+    state.nodes[serverId].serving = true;
+    // verify content hash
+    const recomputed = sha256(c.content);
+    const verified = recomputed === c.hash;
+    if(!verified){
+      log(`  chunk ${c.index} from node-${serverId}: HASH MISMATCH — rejected.`, "bad");
+      ok=false; continue;
+    }
+    assembled.push(c.content);
+    log(`  chunk ${c.index} ← node-${serverId} · hash ${c.hash.slice(0,8)} verified ✓`, "good");
+  }
+  if(ok){ log(`READ ${path}: assembled ${assembled.length} chunk(s), every hash verified. Bytes are exact.`, "good"); }
+  else { log(`READ ${path}: FAILED. File is UNAVAILABLE. No corrupt bytes returned.`, "bad"); }
+  render();
+  setTimeout(clearServing, 2200);
+}
+
+function clearServing(){ state.nodes.forEach(n=>n.serving=false); render(); }
+
+function opReplicate(){
+  const R = state.R;
+  let repaired=0;
+  for(const path in state.files){
+    for(const c of state.files[path].chunks){
+      const s = chunkStatus(c);
+      if(s.kind==="lost"){ continue; } // cannot repair, no source
+      // need live replicas up to R, using healthy reachable-from-a-live-source nodes
+      const live = [...c.replicas].filter(id=>state.nodes[id].up);
+      if(live.length >= R) continue;
+      // candidate healthy nodes not already holding it
+      let cands = liveNodes().map(n=>n.id).filter(id=>!c.replicas.has(id));
+      // rendezvous order for stable placement
+      cands = placeChunk(c.hash, cands, cands.length);
+      while([...c.replicas].filter(id=>state.nodes[id].up).length < R && cands.length){
+        const dest = cands.shift();
+        c.replicas.add(dest);
+        repaired++;
+        log(`re-replicate chunk ${c.index} [${c.hash.slice(0,8)}] → node-${dest} (restore R=${R})`, "good");
+      }
+    }
+  }
+  if(repaired===0) log(`Re-replicate: nothing to repair. All reachable chunks at R=${state.R}.`, "info");
+  else log(`Re-replicate: placed ${repaired} new replica(s).`, "accent");
+  render();
+}
+
+function toggleNode(id){
+  const n = state.nodes[id];
+  n.up = !n.up;
+  log(`node-${id} ${n.up?"HEALED — rejoined cluster":"CRASHED"}.`, n.up?"good":"bad");
+  render();
+}
+
+function togglePartition(){
+  state.partitioned = !state.partitioned;
+  if(state.partitioned){
+    // split: first half group A (with client), rest group B
+    state.nodes.forEach((n,i)=> n.part = i < Math.ceil(NODE_COUNT/2) ? 'A' : 'B');
+    log(`PARTITION: cluster split. Client is in group A (node-0…node-${Math.ceil(NODE_COUNT/2)-1}). Group B is unreachable.`, "warn");
+  } else {
+    state.nodes.forEach(n=> n.part=null);
+    log(`PARTITION HEALED: all nodes reachable again.`, "good");
+  }
+  render();
+}
+
+function healAll(){
+  state.nodes.forEach(n=> n.up=true);
+  log(`All nodes healed.`, "good");
+  render();
+}
+
+function randomWorkload(){
+  const names=["/logs/app.log","/img/avatar.png","/data/index.bin","/cfg/settings.json","/media/song.flac"];
+  const n = 2 + Math.floor(Math.random()*2);
+  for(let i=0;i<n;i++){
+    const p = names[Math.floor(Math.random()*names.length)] + "." + Math.floor(Math.random()*90+10);
+    opWrite(p, 1+Math.floor(Math.random()*4));
+  }
+}
+
+function reset(){
+  state.files={}; state.partitioned=false; state.chunkSeq=0;
+  initNodes();
+  document.getElementById("console").innerHTML="";
+  setQuorum(0,"idle");
+  log("Cluster reset. 6 healthy nodes, no files.", "info");
+  render();
+}
+
+/* ---------- rendering ---------- */
+function nodeLoad(id){
+  let count=0;
+  for(const p in state.files) for(const c of state.files[p].chunks) if(c.replicas.has(id)) count++;
+  return count;
+}
+
+function render(){
+  // nodes
+  const nc = document.getElementById("nodes");
+  nc.innerHTML="";
+  state.nodes.forEach(n=>{
+    const el=document.createElement("div");
+    el.className="node"+(n.up?"":" down")+(n.part?(" part"+n.part):"")+(n.serving?" serving":"");
+    el.onclick=()=>toggleNode(n.id);
+    // gather tiles for chunks this node holds
+    let tiles="";
+    for(const p in state.files){
+      for(const c of state.files[p].chunks){
+        if(c.replicas.has(n.id)){
+          const s = chunkStatus(c);
+          let cls="tile";
+          if(s.kind==="lost") cls+=" lost";
+          else if((s.kind==="under"||s.kind==="unreachable") ) cls+=" under";
+          tiles+=`<div class="${cls}" style="background:${c.color}" title="chunk ${c.index} · ${c.hash.slice(0,12)} · ${p}">${c.index}</div>`;
+        }
+      }
+    }
+    if(!tiles) tiles=`<span class="empty">empty</span>`;
+    const partPill = n.part? `<span class="pill ${n.part.toLowerCase()}">${n.part}</span>`:"";
+    el.innerHTML=`
+      <div class="nhead">
+        <span class="nname"><span class="dot"></span>${n.name}</span>
+        ${partPill}
+      </div>
+      <div class="tiles">${tiles}</div>
+      <div class="nload">${n.up?"up":"down"} · load ${nodeLoad(n.id)} chunk(s)</div>`;
+    nc.appendChild(el);
+  });
+
+  // files table
+  const fc=document.getElementById("files");
+  const paths=Object.keys(state.files);
+  if(paths.length===0){ fc.innerHTML=""; }
+  else{
+    let rows="";
+    for(const p of paths){
+      const f=state.files[p];
+      const st=fileStatus(f);
+      const label = st==="ok"?`<span class="status-ok">available</span>`
+        : st==="under"?`<span class="status-under">under-replicated</span>`
+        : `<span class="status-lost">UNAVAILABLE</span>`;
+      const chunks=f.chunks.map(c=>`<span class="mini" style="background:${c.color}" title="chunk ${c.index} ${c.hash.slice(0,10)}"></span>`).join("");
+      rows+=`<tr><td><code>${p}</code></td><td>${f.chunks.length}</td><td><div class="fchunks">${chunks}</div></td><td>${label}</td></tr>`;
+    }
+    fc.innerHTML=`<table><thead><tr><th>Path</th><th>Chunks</th><th>Layout</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+}
+
+function setQuorum(pct, text){
+  document.getElementById("qfill").style.width = pct+"%";
+  document.getElementById("qtext").textContent = text;
+}
+
+function log(msg, kind){
+  const c=document.getElementById("console");
+  const t=new Date().toLocaleTimeString([], {hour12:false});
+  const line=document.createElement("div");
+  line.className="line";
+  line.innerHTML=`<span class="t">${t}</span><span class="log-${kind||'info'}">${msg}</span>`;
+  c.appendChild(line);
+  c.scrollTop=c.scrollHeight;
+}
+
+/* ---------- wiring ---------- */
+function currentInputs(){
+  return {
+    path: document.getElementById("fpath").value.trim() || "/untitled",
+    size: Math.max(1, Math.min(12, parseInt(document.getElementById("fsize").value||"1",10)))
+  };
+}
+document.getElementById("btnWrite").onclick=()=>{ const {path,size}=currentInputs(); opWrite(path,size); };
+document.getElementById("btnRead").onclick=()=>{ const {path}=currentInputs(); opRead(path); };
+document.getElementById("btnReplicate").onclick=opReplicate;
+document.getElementById("btnPartition").onclick=togglePartition;
+document.getElementById("btnHealAll").onclick=healAll;
+document.getElementById("btnRandom").onclick=randomWorkload;
+document.getElementById("btnReset").onclick=reset;
+document.getElementById("rfactor").onchange=(e)=>{ state.R=parseInt(e.target.value,10); log(`Replication factor set to R=${state.R} (applies to new writes).`, "info"); render(); };
+document.getElementById("sample").onchange=(e)=>{
+  if(!e.target.value) return;
+  const [p,s]=e.target.value.split("|");
+  document.getElementById("fpath").value=p;
+  document.getElementById("fsize").value=s;
+};
+
+/* ---------- boot ---------- */
+state.R = parseInt(document.getElementById("rfactor").value,10);
+initNodes();
+render();
+log("Archipelago simulation ready. 6 nodes, R=3. Write a file to begin.", "accent");
+opWrite("/photos/sunset.raw", 4);
+</script>
 </body>
 </html>
