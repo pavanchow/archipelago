@@ -1,0 +1,18 @@
+[package]
+name = "archipelago"
+version = "0.1.0"
+edition = "2021"
+description = "A dependency-free distributed file system you can run and fault-test as one deterministic process."
+license = "MIT"
+repository = "https://github.com/pavanchow/archipelago"
+
+[lib]
+name = "archipelago"
+path = "src/lib.rs"
+
+[[bin]]
+name = "arch"
+path = "src/bin/arch.rs"
+
+[profile.release]
+opt-level = 3
