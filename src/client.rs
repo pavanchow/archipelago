@@ -19,9 +19,19 @@ use std::collections::{BTreeMap, BTreeSet};
 impl Cluster {
     /// Write `bytes` to `path`, creating or overwriting the file. Chunks are
     /// content-addressed and each is replicated to `write_quorum` nodes before
-    /// the file manifest is committed to metadata.
+    /// the file manifest is committed to metadata. With erasure coding
+    /// configured, chunks are instead encoded into `k + m` shards spread over
+    /// distinct nodes.
     pub fn write_file(&mut self, path: &str, bytes: &[u8]) -> Result<()> {
         let path = normalize(path).ok_or_else(|| Error::InvalidPath(path.into()))?;
+        match self.opts.erasure {
+            Some(er) => self.write_file_erasure(&path, bytes, er),
+            None => self.write_file_replicated(&path, bytes),
+        }
+    }
+
+    /// The replicated write path.
+    fn write_file_replicated(&mut self, path: &str, bytes: &[u8]) -> Result<()> {
         let (chunks, manifest) = chunk_bytes(bytes, self.opts.chunk_size);
 
         let live = self.live_storage();
@@ -91,10 +101,125 @@ impl Cluster {
             }
         }
 
-        self.meta_apply(MetaOp::Put {
-            path: path.clone(),
-            manifest,
-        }, &path)
+        self.meta_apply(
+            MetaOp::Put {
+                path: path.to_string(),
+                manifest,
+            },
+            path,
+        )
+    }
+
+    /// The erasure-coded write path. Every chunk becomes `k + m` shards; the
+    /// shards of one chunk go to distinct storage nodes, so losing any `m`
+    /// nodes still leaves `k` shards and the chunk stays readable. The write
+    /// commits once every chunk group has `max(write_quorum, k)` durable
+    /// shard positions, because fewer than k shards cannot reconstruct.
+    fn write_file_erasure(&mut self, path: &str, bytes: &[u8], er: crate::erasure::Erasure) -> Result<()> {
+        let cs = self.opts.chunk_size.max(1);
+        let live = self.live_storage();
+        if live.len() < er.total() {
+            return Err(Error::WriteQuorumFailed {
+                needed: er.total(),
+                got: live.len(),
+            });
+        }
+
+        // Encode every chunk into its shard group and collect the flat shard
+        // id list the manifest will carry.
+        let mut groups: Vec<Vec<(Hash, Vec<u8>)>> = Vec::new();
+        for window in bytes.chunks(cs) {
+            let shards = er.encode(window);
+            groups.push(
+                shards
+                    .into_iter()
+                    .map(|s| {
+                        let id = sha256(&s);
+                        (id, s)
+                    })
+                    .collect(),
+            );
+        }
+        let manifest = crate::chunk::Manifest {
+            size: bytes.len() as u64,
+            content_hash: sha256(bytes),
+            chunks: groups
+                .iter()
+                .flat_map(|g| g.iter().map(|(id, _)| *id))
+                .collect(),
+            erasure: Some((er.k as u8, er.m as u8)),
+        };
+        let eff_wq = self.opts.write_quorum.max(er.k);
+
+        // Choose one distinct primary node per shard position within a group.
+        // Identical shard bytes at several positions are stored once; every
+        // position sharing that content address is satisfied by the same blob.
+        let mut sends: Vec<(u32, Hash, Vec<u8>)> = Vec::new();
+        let mut assigned: BTreeMap<Hash, u32> = BTreeMap::new();
+        for g in &groups {
+            let mut used: BTreeSet<u32> = BTreeSet::new();
+            for (id, data) in g {
+                if assigned.contains_key(id) {
+                    continue;
+                }
+                let ranking = place(id, &live, live.len());
+                let node = ranking
+                    .iter()
+                    .copied()
+                    .find(|n| !used.contains(n))
+                    .unwrap_or(ranking[0]);
+                used.insert(node);
+                assigned.insert(*id, node);
+                sends.push((node, *id, data.clone()));
+            }
+        }
+        for (n, id, data) in &sends {
+            self.send(
+                NodeId::Client,
+                NodeId::Storage(*n),
+                &Message::StoreChunk { id: *id, data: data.clone() },
+            );
+        }
+
+        let deadline = self.clock() + self.opts.op_deadline;
+        let mut acks: BTreeMap<Hash, BTreeSet<u32>> = BTreeMap::new();
+        let group_ok = |g: &Vec<(Hash, Vec<u8>)>, acks: &BTreeMap<Hash, BTreeSet<u32>>| {
+            g.iter()
+                .filter(|(id, _)| acks.contains_key(id))
+                .count()
+                >= eff_wq
+        };
+        loop {
+            for (from, msg) in self.take_inbox() {
+                if let Message::StoreAck { id } = msg {
+                    if let NodeId::Storage(_) = from {
+                        acks.entry(id).or_default();
+                    }
+                }
+            }
+            if groups.iter().all(|g| group_ok(g, &acks)) {
+                break;
+            }
+            if self.clock() >= deadline || !self.pump_step() {
+                if groups.iter().all(|g| group_ok(g, &acks)) {
+                    break;
+                }
+                let got = groups
+                    .iter()
+                    .map(|g| g.iter().filter(|(id, _)| acks.contains_key(id)).count())
+                    .min()
+                    .unwrap_or(0);
+                return Err(Error::WriteQuorumFailed { needed: eff_wq, got });
+            }
+        }
+
+        self.meta_apply(
+            MetaOp::Put {
+                path: path.to_string(),
+                manifest,
+            },
+            path,
+        )
     }
 
     /// Read the whole file at `path`, verifying its content hash end to end.
@@ -106,7 +231,104 @@ impl Cluster {
             QueryResult::Err(c) => return Err(meta_err(c, &path)),
             _ => return Err(Error::MetadataUnavailable),
         };
+        match manifest.erasure {
+            Some((k, m)) => {
+                let er = crate::erasure::Erasure::new(k as usize, m as usize)
+                    .map_err(|_| Error::IntegrityError)?;
+                self.read_file_erasure(&path, manifest, er)
+            }
+            None => self.read_file_replicated(&path, manifest),
+        }
+    }
 
+    /// The erasure-coded read path. Every shard position is fetched from the
+    /// live nodes and verified against its content address, so a corrupt or
+    /// misplaced shard degrades to a missing one. Any k verified positions
+    /// reconstruct a chunk; after reconstruction, lost shard positions are
+    /// re-encoded and re-stored as fire-and-forget repair.
+    fn read_file_erasure(
+        &mut self,
+        path: &str,
+        manifest: crate::chunk::Manifest,
+        er: crate::erasure::Erasure,
+    ) -> Result<Vec<u8>> {
+        let live = self.live_storage();
+        let total = er.total();
+        let cs = self.opts.chunk_size.max(1);
+        let distinct: BTreeSet<Hash> = manifest.chunks.iter().copied().collect();
+
+        for id in &distinct {
+            for &n in &live {
+                self.send(NodeId::Client, NodeId::Storage(n), &Message::FetchChunk { id: *id });
+            }
+        }
+
+        let deadline = self.clock() + self.opts.op_deadline;
+        let mut have: BTreeMap<Hash, Vec<u8>> = BTreeMap::new();
+        loop {
+            for (_from, msg) in self.take_inbox() {
+                if let Message::ChunkData { id, data } = msg {
+                    if let Some(d) = data.filter(|d| sha256(d) == id) {
+                        have.entry(id).or_insert(d);
+                    }
+                }
+            }
+            if distinct.iter().all(|id| have.contains_key(id)) {
+                break;
+            }
+            if self.clock() >= deadline || !self.pump_step() {
+                break;
+            }
+        }
+
+        let size = manifest.size as usize;
+        let n_groups = manifest.chunks.len() / total;
+        let mut out: Vec<Vec<u8>> = Vec::with_capacity(n_groups);
+        for g in 0..n_groups {
+            let group_ids = &manifest.chunks[g * total..(g + 1) * total];
+            let chunk_len = (size - g * cs).min(cs);
+            let shard_len = er.shard_len(chunk_len).max(1);
+            let slots: Vec<Option<&[u8]>> = group_ids
+                .iter()
+                .map(|id| {
+                    have.get(id)
+                        .filter(|d| d.len() == shard_len)
+                        .map(|d| d.as_slice())
+                })
+                .collect();
+            let chunk = er.decode(&slots, chunk_len).map_err(|_| {
+                Error::ChunkUnavailable(format!("{} chunk group {g}", path))
+            })?;
+
+            // Repair: rebuild every missing position from the reconstructed
+            // chunk and hand it to the best live node for that shard.
+            let full = er.encode(&chunk);
+            for (pos, id) in group_ids.iter().enumerate() {
+                if slots[pos].is_none() && sha256(&full[pos]) == *id {
+                    if let Some(&n) = place(id, &live, 1).first() {
+                        self.send(
+                            NodeId::Client,
+                            NodeId::Storage(n),
+                            &Message::StoreChunk {
+                                id: *id,
+                                data: full[pos].clone(),
+                            },
+                        );
+                    }
+                }
+            }
+            out.push(chunk);
+        }
+
+        let bytes = reassemble(&out);
+        if sha256(&bytes) != manifest.content_hash {
+            return Err(Error::IntegrityError);
+        }
+        Ok(bytes)
+    }
+
+    /// The replicated read path.
+    fn read_file_replicated(&mut self, _path: &str, manifest: crate::chunk::Manifest) -> Result<Vec<u8>> {
         let live = self.live_storage();
         let distinct: BTreeSet<Hash> = manifest.chunks.iter().copied().collect();
 

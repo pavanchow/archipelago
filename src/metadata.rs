@@ -547,6 +547,7 @@ mod tests {
             size: 3,
             content_hash: sha256(b"abc"),
             chunks: vec![sha256(b"abc")],
+            erasure: None,
         }
     }
 

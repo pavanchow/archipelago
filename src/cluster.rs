@@ -349,6 +349,14 @@ impl Cluster {
                 for c in &m.chunks {
                     e.put_hash(c);
                 }
+                match m.erasure {
+                    None => e.put_u8(0),
+                    Some((k, mm)) => {
+                        e.put_u8(1);
+                        e.put_u8(k);
+                        e.put_u8(mm);
+                    }
+                }
             }
             e.put_uvarint(dirs.len() as u64);
             for d in dirs {

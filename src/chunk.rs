@@ -20,6 +20,11 @@ pub struct Chunk {
 }
 
 /// The recipe for reconstructing a file from chunks.
+///
+/// In replication mode `chunks` holds one content address per chunk position.
+/// In erasure mode `erasure` is `Some((k, m))` and `chunks` holds the flat
+/// list of shard content addresses, `k + m` per chunk group in order, so
+/// chunk group g occupies positions `g * (k + m) .. (g + 1) * (k + m)`.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Manifest {
     /// Total file size in bytes.
@@ -28,6 +33,8 @@ pub struct Manifest {
     pub content_hash: Hash,
     /// Chunk ids in file order. May repeat when chunks are identical.
     pub chunks: Vec<Hash>,
+    /// Erasure parameters (k, m) when the file is erasure coded.
+    pub erasure: Option<(u8, u8)>,
 }
 
 impl Manifest {
@@ -38,6 +45,14 @@ impl Manifest {
         e.put_uvarint(self.chunks.len() as u64);
         for c in &self.chunks {
             e.put_hash(c);
+        }
+        match self.erasure {
+            None => e.put_u8(0),
+            Some((k, m)) => {
+                e.put_u8(1);
+                e.put_u8(k);
+                e.put_u8(m);
+            }
         }
     }
 
@@ -57,10 +72,20 @@ impl Manifest {
         for _ in 0..n {
             chunks.push(d.get_hash()?);
         }
+        let erasure = match d.get_u8()? {
+            0 => None,
+            1 => {
+                let k = d.get_u8()?;
+                let m = d.get_u8()?;
+                Some((k, m))
+            }
+            t => return Err(Error::Decode(format!("bad manifest erasure tag {t}"))),
+        };
         Ok(Manifest {
             size,
             content_hash,
             chunks,
+            erasure,
         })
     }
 }
@@ -86,6 +111,7 @@ pub fn chunk_bytes(data: &[u8], chunk_size: usize) -> (Vec<Chunk>, Manifest) {
         size: data.len() as u64,
         content_hash: sha256(data),
         chunks: ids,
+        erasure: None,
     };
     (chunks, manifest)
 }

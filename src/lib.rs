@@ -30,6 +30,7 @@ pub mod chunk;
 pub mod client;
 pub mod cluster;
 pub mod encode;
+pub mod erasure;
 pub mod error;
 pub mod hash;
 pub mod message;
@@ -42,6 +43,7 @@ pub mod varint;
 
 pub use chunk::{Chunk, Manifest};
 pub use cluster::{Cluster, FileHealth, NodeStatus, Status};
+pub use erasure::Erasure;
 pub use error::{Error, Result};
 pub use hash::{sha256, Hash};
 pub use message::{DirEntry, NodeId, StatInfo};

@@ -1,5 +1,6 @@
 //! Cluster configuration.
 
+use crate::erasure::Erasure;
 use crate::net::LinkParams;
 
 /// Tunable parameters for a cluster.
@@ -14,6 +15,11 @@ pub struct Options {
     /// Valid replicas required for a read to succeed. One means first good copy
     /// wins, with read-repair filling in the stragglers.
     pub read_quorum: usize,
+    /// Erasure coding instead of replication. When `Some`, every chunk is
+    /// Reed-Solomon encoded into `k + m` shards that are spread over distinct
+    /// storage nodes, and a read needs any `k` of them. When `None`, chunks
+    /// are replicated `replication_factor` times.
+    pub erasure: Option<Erasure>,
     /// Number of storage nodes.
     pub node_count: u32,
     /// Number of metadata nodes.
@@ -40,6 +46,7 @@ impl Default for Options {
             replication_factor: 3,
             write_quorum: 2,
             read_quorum: 1,
+            erasure: None,
             node_count: 5,
             meta_count: 3,
             meta_quorum: 2,
@@ -54,6 +61,18 @@ impl Options {
     pub fn small() -> Self {
         Options {
             chunk_size: 1024,
+            ..Options::default()
+        }
+    }
+
+    /// A small cluster with erasure coding instead of replication. Every
+    /// chunk becomes k data plus m parity shards spread over distinct nodes;
+    /// a read needs any k of them.
+    pub fn small_erasure(k: usize, m: usize) -> Self {
+        Options {
+            chunk_size: 1024,
+            replication_factor: 1,
+            erasure: Some(Erasure::new(k, m).expect("valid erasure parameters")),
             ..Options::default()
         }
     }

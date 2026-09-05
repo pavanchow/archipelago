@@ -613,6 +613,7 @@ mod tests {
             size,
             content_hash: sha256(b"file"),
             chunks: vec![sha256(b"a"), sha256(b"b")],
+            erasure: None,
         }
     }
 
