@@ -22,6 +22,12 @@ impl Cluster {
     /// the file manifest is committed to metadata. With erasure coding
     /// configured, chunks are instead encoded into `k + m` shards spread over
     /// distinct nodes.
+/// # Errors
+/// 
+/// Returns [`Error::InvalidPath`] for a malformed path,
+/// [`Error::WriteQuorumFailed`] when chunk acknowledgements fall short of
+/// the quorum within the deadline, and [`Error::MetadataUnavailable`] when
+/// the manifest cannot be committed.
     pub fn write_file(&mut self, path: &str, bytes: &[u8]) -> Result<()> {
         let path = normalize(path).ok_or_else(|| Error::InvalidPath(path.into()))?;
         match self.opts.erasure {
@@ -67,7 +73,7 @@ impl Cluster {
         let satisfied = |acks: &BTreeMap<Hash, BTreeSet<u32>>| {
             unique
                 .keys()
-                .all(|id| acks.get(id).map(|s| s.len()).unwrap_or(0) >= wq)
+                .all(|id| acks.get(id).map_or(0, BTreeSet::len) >= wq)
         };
         loop {
             for (from, msg) in self.take_inbox() {
@@ -83,7 +89,7 @@ impl Cluster {
             if self.clock() >= deadline {
                 let got = unique
                     .keys()
-                    .map(|id| acks.get(id).map(|s| s.len()).unwrap_or(0))
+                    .map(|id| acks.get(id).map_or(0, BTreeSet::len))
                     .min()
                     .unwrap_or(0);
                 return Err(Error::WriteQuorumFailed { needed: wq, got });
@@ -94,7 +100,7 @@ impl Cluster {
                 }
                 let got = unique
                     .keys()
-                    .map(|id| acks.get(id).map(|s| s.len()).unwrap_or(0))
+                    .map(|id| acks.get(id).map_or(0, BTreeSet::len))
                     .min()
                     .unwrap_or(0);
                 return Err(Error::WriteQuorumFailed { needed: wq, got });
@@ -223,6 +229,14 @@ impl Cluster {
     }
 
     /// Read the whole file at `path`, verifying its content hash end to end.
+/// # Errors
+/// 
+/// Returns [`Error::InvalidPath`] for a malformed path,
+/// [`Error::NotFound`] when the file does not exist,
+/// [`Error::MetadataUnavailable`] when the metadata service cannot answer,
+/// [`Error::ChunkUnavailable`] when no live copy of a needed chunk (or
+/// enough erasure shards) survives, and [`Error::IntegrityError`] when the
+/// reassembled bytes fail the content hash.
     pub fn read_file(&mut self, path: &str) -> Result<Vec<u8>> {
         let path = normalize(path).ok_or_else(|| Error::InvalidPath(path.into()))?;
         let manifest = match self.meta_query(Query::Get { path: path.clone() }, &path)? {
@@ -235,9 +249,9 @@ impl Cluster {
             Some((k, m)) => {
                 let er = crate::erasure::Erasure::new(k as usize, m as usize)
                     .map_err(|_| Error::IntegrityError)?;
-                self.read_file_erasure(&path, manifest, er)
+                self.read_file_erasure(&path, &manifest, er)
             }
-            None => self.read_file_replicated(&path, manifest),
+            None => self.read_file_replicated(&path, &manifest),
         }
     }
 
@@ -249,7 +263,7 @@ impl Cluster {
     fn read_file_erasure(
         &mut self,
         path: &str,
-        manifest: crate::chunk::Manifest,
+        manifest: &crate::chunk::Manifest,
         er: crate::erasure::Erasure,
     ) -> Result<Vec<u8>> {
         let live = self.live_storage();
@@ -293,11 +307,11 @@ impl Cluster {
                 .map(|id| {
                     have.get(id)
                         .filter(|d| d.len() == shard_len)
-                        .map(|d| d.as_slice())
+                        .map(Vec::as_slice)
                 })
                 .collect();
             let chunk = er.decode(&slots, chunk_len).map_err(|_| {
-                Error::ChunkUnavailable(format!("{} chunk group {g}", path))
+                Error::ChunkUnavailable(format!("{path} chunk group {g}"))
             })?;
 
             // Repair: rebuild every missing position from the reconstructed
@@ -328,7 +342,7 @@ impl Cluster {
     }
 
     /// The replicated read path.
-    fn read_file_replicated(&mut self, _path: &str, manifest: crate::chunk::Manifest) -> Result<Vec<u8>> {
+    fn read_file_replicated(&mut self, _path: &str, manifest: &crate::chunk::Manifest) -> Result<Vec<u8>> {
         let live = self.live_storage();
         let distinct: BTreeSet<Hash> = manifest.chunks.iter().copied().collect();
 
@@ -380,7 +394,7 @@ impl Cluster {
         for id in &distinct {
             let data = &have[id];
             for n in place(id, &live, self.opts.replication_factor) {
-                if missing_at.get(id).map(|s| s.contains(&n)).unwrap_or(false) {
+                if missing_at.get(id).is_some_and(|s| s.contains(&n)) {
                     self.send(
                         NodeId::Client,
                         NodeId::Storage(n),
@@ -399,18 +413,34 @@ impl Cluster {
     }
 
     /// Delete a file or empty directory.
+/// # Errors
+/// 
+/// Returns [`Error::InvalidPath`] for a malformed path,
+/// [`Error::DirectoryNotEmpty`] when a directory still has children, and
+/// [`Error::NotFound`] when the path does not exist.
     pub fn delete(&mut self, path: &str) -> Result<()> {
         let path = normalize(path).ok_or_else(|| Error::InvalidPath(path.into()))?;
         self.meta_apply(MetaOp::Delete { path: path.clone() }, &path)
     }
 
     /// Create a directory. The parent must already exist.
+/// # Errors
+/// 
+/// Returns [`Error::InvalidPath`] for a malformed path,
+/// [`Error::AlreadyExists`] when the path exists, and
+/// [`Error::NotFound`] or [`Error::NotADirectory`] when the parent cannot
+/// hold a new directory.
     pub fn mkdir(&mut self, path: &str) -> Result<()> {
         let path = normalize(path).ok_or_else(|| Error::InvalidPath(path.into()))?;
         self.meta_apply(MetaOp::Mkdir { path: path.clone() }, &path)
     }
 
     /// Rename a file or directory subtree.
+/// # Errors
+/// 
+/// Returns [`Error::InvalidPath`] for malformed paths or a rename into the
+/// source's own subtree, [`Error::NotFound`] when the source is missing, and
+/// [`Error::AlreadyExists`] when the destination exists.
     pub fn rename(&mut self, from: &str, to: &str) -> Result<()> {
         let from = normalize(from).ok_or_else(|| Error::InvalidPath(from.into()))?;
         let to = normalize(to).ok_or_else(|| Error::InvalidPath(to.into()))?;
@@ -418,6 +448,11 @@ impl Cluster {
     }
 
     /// List the immediate children of a directory.
+/// # Errors
+/// 
+/// Returns [`Error::InvalidPath`] for a malformed path,
+/// [`Error::NotFound`] when the directory does not exist, and
+/// [`Error::NotADirectory`] when the path is a file.
     pub fn list(&mut self, path: &str) -> Result<Vec<DirEntry>> {
         let path = normalize(path).ok_or_else(|| Error::InvalidPath(path.into()))?;
         match self.meta_query(Query::List { path: path.clone() }, &path)? {
@@ -428,6 +463,10 @@ impl Cluster {
     }
 
     /// Stat a single path.
+/// # Errors
+/// 
+/// Returns [`Error::InvalidPath`] for a malformed path and
+/// [`Error::NotFound`] when the path does not exist.
     pub fn stat(&mut self, path: &str) -> Result<StatInfo> {
         let path = normalize(path).ok_or_else(|| Error::InvalidPath(path.into()))?;
         match self.meta_query(Query::Stat { path: path.clone() }, &path)? {

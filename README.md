@@ -78,6 +78,20 @@ File operations: `write_file`, `read_file`, `delete`, `mkdir`, `list`, `rename`,
 `stat`. Every read verifies the reassembled bytes against the file content hash
 before returning, so a read either yields the correct bytes or fails loudly.
 
+Erasure coding is an alternative chunk protection mode. Instead of replicating
+each chunk R times, each chunk is Reed Solomon encoded into k data plus m parity
+shards that are spread over distinct storage nodes, and a read needs any k of
+them.
+
+```rust
+use archipelago::Options;
+
+// Every chunk becomes 2 data plus 2 parity shards over 4 of the 5 nodes.
+let mut c = Cluster::new(Options::small_erasure(2, 2), 7);
+c.write_file("/sharded", &big_bytes)?;
+assert_eq!(c.read_file("/sharded")?, big_bytes);
+```
+
 ## Configuration
 
 `Options` controls chunk size, replication factor R, write and read quorums, the
@@ -87,6 +101,17 @@ are R equal to 3, write quorum 2, and read quorum 1 with read repair. R equal to
 on a majority of replicas before it is acknowledged. Read quorum 1 is safe
 because every returned chunk is checked against its content hash, so one good
 copy is provably the right bytes.
+
+Setting `erasure` switches the write and read paths from replication to
+Reed Solomon erasure coding over GF(2^8). With k data and m parity shards per
+chunk, up to m shard holders can be lost and the file still reads, because any
+k of the k+m shards reconstruct it. The write commits once every chunk group
+has max of write quorum and k durable shard positions, since fewer than k shards
+cannot reconstruct. A read verifies every fetched shard against its content
+address, so a corrupt shard just counts as missing, and then re-encodes lost
+shard positions onto live nodes as repair. The k+m shards of one chunk are
+placed on distinct nodes, so the cluster needs at least k+m live nodes to accept
+erasure writes.
 
 ## Correctness gates
 
@@ -105,11 +130,30 @@ The tests are the point. Each gate proves a specific property.
    random buffers including the edge sizes.
 4. `tests/determinism.rs` asserts the same seed and script produce the identical
    delivery order and final state.
+5. `tests/fault_differential.rs` runs the randomized differential while crash,
+   recovery, and partition events are interleaved, always inside the fault
+   tolerance of the tuning. A successful read must return exactly the oracle
+   bytes unless a failed but possibly committed op touched the path, and every
+   quiescent window must return to strict agreement with the oracle. A
+   committed file that vanishes or comes back wrong is a hard failure.
+6. `tests/boundaries.rs` pins the explicit edge cases: the empty file, exact
+   chunk boundaries and shrinking overwrites, hostile and relative paths, root
+   protections, rename onto itself and into its own subtree, deep nesting with
+   a subtree rename, delete semantics, and reads while the holders of a chunk
+   are partitioned away at one, two, and three failures.
+7. `tests/stress.rs` samples the Options space with a mini differential per
+   tuning and re-checks determinism under faults across tunings.
+8. `tests/erasure.rs` is the erasure coding gate. It covers round trips across
+   sizes, an oracle differential in erasure mode, tolerance of m holder losses,
+   clean failure beyond m losses, read repair regenerating lost shards while
+   the holder stays down, and the too few nodes rejection.
 
 Run the heavy fuzz:
 
 ```bash
 ARCH_FUZZ_OPS=5000 cargo test --test differential
+ARCH_FAULT_FILES=400 cargo test --test faults
+ARCH_STRESS_OPS=1500 cargo test --test stress
 ```
 
 ## Layout
@@ -120,6 +164,7 @@ src/hash.rs         SHA-256 from scratch and the content address type
 src/varint.rs       LEB128 varints
 src/encode.rs       length prefixed serialization
 src/chunk.rs        chunking and the file manifest
+src/erasure.rs      Reed Solomon erasure coding over GF(2^8)
 src/placement.rs    rendezvous hashing for replica placement
 src/message.rs      wire messages and their serialization
 src/net.rs          the deterministic network simulator
