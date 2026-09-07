@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Archipelago logo">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#0071e3"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#g)"/>
+  <g stroke="#fff" stroke-width="4.5" stroke-linecap="round" opacity="0.55">
+    <path d="M64 64 L40 42"/>
+    <path d="M64 64 L92 40"/>
+    <path d="M64 64 L96 86"/>
+    <path d="M64 64 L38 90"/>
+  </g>
+  <g fill="#fff">
+    <circle cx="40" cy="42" r="9"/>
+    <circle cx="92" cy="40" r="9"/>
+    <circle cx="96" cy="86" r="9"/>
+    <circle cx="38" cy="90" r="9"/>
+  </g>
+  <circle cx="64" cy="64" r="13" fill="#fff"/>
+  <circle cx="64" cy="64" r="6.5" fill="url(#g)"/>
+</svg>

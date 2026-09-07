@@ -1,3 +1,5 @@
+<img src="docs/logo.svg" alt="Archipelago logo" width="96">
+
 # Archipelago
 
 Archipelago is a distributed file system written from scratch in Rust with zero
