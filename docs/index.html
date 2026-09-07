@@ -590,11 +590,11 @@ function opRead(path){
   for(const c of f.chunks){
     const s = chunkStatus(c);
     if(s.kind==="lost"){
-      log(`  chunk ${c.index} [${c.hash.slice(0,8)}] UNAVAILABLE — all ${state.R} replicas lost.`, "bad");
+      log(`  chunk ${c.index} [${c.hash.slice(0,8)}] UNAVAILABLE, all ${state.R} replicas lost.`, "bad");
       ok=false; continue;
     }
     if(s.kind==="unreachable"){
-      log(`  chunk ${c.index} [${c.hash.slice(0,8)}] UNREACHABLE — live replicas stranded across partition.`, "bad");
+      log(`  chunk ${c.index} [${c.hash.slice(0,8)}] UNREACHABLE, live replicas stranded across partition.`, "bad");
       ok=false; continue;
     }
     const serverId = s.reachable[0];
@@ -603,7 +603,7 @@ function opRead(path){
     const recomputed = sha256(c.content);
     const verified = recomputed === c.hash;
     if(!verified){
-      log(`  chunk ${c.index} from node-${serverId}: HASH MISMATCH — rejected.`, "bad");
+      log(`  chunk ${c.index} from node-${serverId}: HASH MISMATCH, rejected.`, "bad");
       ok=false; continue;
     }
     assembled.push(c.content);
@@ -647,7 +647,7 @@ function opReplicate(){
 function toggleNode(id){
   const n = state.nodes[id];
   n.up = !n.up;
-  log(`node-${id} ${n.up?"HEALED — rejoined cluster":"CRASHED"}.`, n.up?"good":"bad");
+  log(`node-${id} ${n.up?"HEALED, rejoined cluster":"CRASHED"}.`, n.up?"good":"bad");
   render();
 }
 
