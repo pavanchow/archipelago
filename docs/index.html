@@ -2,9 +2,26 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Archipelago — a distributed file system you can watch</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Archipelago: a from-scratch distributed file system with deterministic simulation</title>
+<meta name="description" content="Archipelago by Pavan Nallamothu: a distributed file system written from scratch in Rust with zero dependencies. Content-addressed chunking, rendezvous placement, quorum writes, and self-healing re-replication, with the whole cluster and network running inside one seeded deterministic simulation. Crash a node, partition the network, and watch quorum and SHA-256 checks decide every read.">
+<meta name="author" content="Pavan Nallamothu (pavanchow)">
+<link rel="canonical" href="https://pavanchow.github.io/archipelago/">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="author" href="https://github.com/pavanchow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Archipelago: a from-scratch distributed file system with deterministic simulation">
+<meta property="og:description" content="A distributed file system in Rust, zero dependencies: chunking, rendezvous placement, quorum, and self-healing, with the whole cluster running as one seeded simulation you can fault-inject and replay. By Pavan Nallamothu.">
+<meta property="og:url" content="https://pavanchow.github.io/archipelago/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Archipelago: a from-scratch distributed file system with deterministic simulation">
+<meta name="twitter:description" content="Chunk it, hash it, spread it across nodes, and survive losing them. A read returns the exact bytes or fails loudly, never silent corruption.">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Archipelago","applicationCategory":"DeveloperApplication","operatingSystem":"Cross-platform","description":"Archipelago is a distributed file system written from scratch in Rust with zero external dependencies. It does content-addressed chunking, rendezvous placement, replication with quorum reads and writes, self-healing re-replication, and optional Reed Solomon erasure coding, with the entire cluster and network running inside one seeded deterministic simulation for fault injection and exact replay.","url":"https://pavanchow.github.io/archipelago/","author":{"@type":"Person","name":"Pavan Nallamothu"},"programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/archipelago","license":"https://opensource.org/licenses/MIT"}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Person","name":"Pavan Nallamothu","alternateName":"pavanchow","url":"https://github.com/pavanchow","sameAs":["https://github.com/pavanchow","https://hackerone.com/pavanchow"]}
+</script>
 <style>
 :root {
   --bg: #fbfbfd;
@@ -16,6 +33,7 @@
   --shadow: 0 4px 24px rgba(0,0,0,0.06);
   --shadow-lg: 0 12px 40px rgba(0,0,0,0.10);
   --accent: #0071e3;
+  --accent2: #38bdf8;
   --accent-soft: rgba(0,113,227,0.10);
   --good: #1a8a3f;
   --good-soft: rgba(26,138,63,0.12);
@@ -28,18 +46,20 @@
   --radius: 20px;
   --radius-sm: 12px;
   --maxw: 1080px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, "SF Mono", Consolas, monospace;
 }
-* { box-sizing: border-box; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
+/* Base body first. */
 body {
-  margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: var(--bg);
+  background: #fff;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   line-height: 1.5;
   letter-spacing: -0.01em;
 }
+/* Dark override after the base body rule. */
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #000000;
@@ -51,6 +71,7 @@ body {
     --shadow: 0 4px 24px rgba(0,0,0,0.5);
     --shadow-lg: 0 12px 40px rgba(0,0,0,0.6);
     --accent: #2997ff;
+    --accent2: #7dd3fc;
     --accent-soft: rgba(41,151,255,0.16);
     --good: #4cd964;
     --good-soft: rgba(76,217,100,0.16);
@@ -61,55 +82,55 @@ body {
     --node-bg: #1c1c1e;
     --tile-empty: rgba(255,255,255,0.07);
   }
-  body { background: var(--bg); color: var(--text); }
+  body { background: #000; color: var(--text); }
 }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
+code { font-family: var(--mono); font-size: .92em; background: var(--tile-empty); border-radius: 4px; padding: .1em .4em; }
 
 .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
 
+/* Nav */
+nav { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.82); backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid var(--border); }
+@media (prefers-color-scheme: dark){ nav { background: rgba(0,0,0,.72); } }
+nav .row { display: flex; justify-content: space-between; align-items: center; height: 56px; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+nav .brand { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight: 650; letter-spacing: -.01em; }
+nav .brand .gem { width: 15px; height: 15px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: linear-gradient(135deg, var(--accent2), var(--accent)); }
+nav .links { display: flex; gap: 24px; align-items: center; }
+nav .links a { color: var(--text); font-size: 14.5px; }
+@media (max-width: 640px){ nav .links a:not(.gh){ display: none; } }
+
 /* Hero */
-.hero { text-align: center; padding: 96px 24px 56px; }
-.hero .mark {
-  display: inline-flex; gap: 10px; align-items: center;
-  font-size: 13px; letter-spacing: 0.02em; color: var(--text-secondary);
-  border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; margin-bottom: 28px;
-}
+.hero { text-align: center; padding: 84px 24px 34px; }
+.hero .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
 .hero h1 {
-  font-size: clamp(44px, 8vw, 88px); line-height: 1.02; margin: 0 0 18px;
-  letter-spacing: -0.03em; font-weight: 700;
-  background: linear-gradient(120deg, var(--text), var(--text-secondary));
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  font-size: clamp(42px, 7.4vw, 74px); line-height: 1.04; margin: 16px 0 0;
+  letter-spacing: -0.035em; font-weight: 700; text-wrap: balance;
 }
-.hero .tag { font-size: clamp(20px, 3.4vw, 30px); color: var(--text); font-weight: 500; margin: 0 auto 26px; max-width: 760px; }
-.hero .lede { font-size: 18px; color: var(--text-secondary); max-width: 720px; margin: 0 auto 34px; }
-.cta { display: inline-flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
-.btn {
-  border: none; cursor: pointer; font: inherit; font-weight: 500;
-  padding: 13px 24px; border-radius: 999px; transition: transform .15s ease, background .15s ease, box-shadow .15s ease;
-}
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-primary:hover { transform: translateY(-1px); box-shadow: var(--shadow); text-decoration: none; }
-.btn-ghost { background: transparent; color: var(--accent); border: 1px solid var(--border-strong); }
-.btn-ghost:hover { background: var(--accent-soft); text-decoration: none; }
+.hero .sub { font-size: clamp(17px, 2.1vw, 21px); color: var(--text-secondary); max-width: 720px; margin: 22px auto 0; }
+.cta { display: inline-flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 32px; }
+.btn { border: 1px solid var(--text); cursor: pointer; font: inherit; font-weight: 600; font-size: 15px; color: var(--text); padding: 13px 26px; border-radius: 999px; transition: opacity .15s ease; }
+.btn:hover { opacity: .75; text-decoration: none; }
+.btn.primary { background: var(--text); color: var(--bg-elevated); }
+@media (prefers-color-scheme: dark){ .btn.primary { color: #000; } }
 
-/* Gap cards */
-.gap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 8px 0 40px; }
-.gap .card {
-  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 26px; box-shadow: var(--shadow);
-}
-.gap .card h3 { margin: 0 0 8px; font-size: 17px; }
-.gap .card p { margin: 0; color: var(--text-secondary); font-size: 15px; }
-.gap .card .k { font-size: 13px; font-weight: 600; color: var(--accent); letter-spacing: .02em; text-transform: uppercase; }
+/* How-to card */
+details.howto { max-width: 760px; margin: 6px auto 8px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px; padding: 2px 20px; box-shadow: var(--shadow); }
+details.howto > summary { cursor: pointer; list-style: none; font-weight: 600; padding: 15px 0; display: flex; align-items: center; gap: 9px; }
+details.howto > summary::-webkit-details-marker { display: none; }
+details.howto > summary::before { content: "\25B8"; color: var(--accent); transition: transform .15s; }
+details.howto[open] > summary::before { transform: rotate(90deg); }
+details.howto .howbody { padding: 0 0 18px; }
+details.howto ol { margin: 4px 0 0; padding-left: 22px; }
+details.howto li { margin-bottom: 12px; color: var(--text-secondary); font-size: 15px; }
+details.howto li strong { color: var(--text); }
+details.howto h3 { margin: 24px 0 10px; font-size: 17px; letter-spacing: -.02em; }
+.tour { background: var(--accent-soft); border-radius: var(--radius-sm); padding: 20px 22px; margin-top: 6px; }
+.tour ol { padding-left: 20px; }
+.tour li { color: var(--text); }
 
-/* Section */
-section { padding: 40px 0; }
-.section-title { font-size: clamp(28px, 4.4vw, 40px); letter-spacing: -0.02em; margin: 0 0 10px; font-weight: 650; }
-.section-sub { font-size: 18px; color: var(--text-secondary); margin: 0 0 28px; max-width: 760px; }
-h2, h3, h4 { letter-spacing: -0.02em; }
-
-/* Simulator */
+/* Stage + sim */
+.stage { max-width: var(--maxw); margin: 0 auto; padding: 8px 24px 0; }
 .sim {
   background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow-lg); padding: 26px; margin-top: 8px;
@@ -171,8 +192,7 @@ h2, h3, h4 { letter-spacing: -0.02em; }
 .legend { display: flex; flex-wrap: wrap; gap: 18px 26px; margin: 20px 0 6px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-secondary); }
 .legend .item { display: flex; align-items: center; gap: 8px; }
 .legend .sw { width: 16px; height: 16px; border-radius: 5px; }
-.badge { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--tile-empty); padding: 2px 8px; border-radius: 6px; }
-
+.badge { font-family: var(--mono); font-size: 12px; background: var(--tile-empty); padding: 2px 8px; border-radius: 6px; }
 .quorum { display: flex; align-items: center; gap: 10px; }
 .qbar { flex: 1; height: 8px; background: var(--tile-empty); border-radius: 999px; overflow: hidden; }
 .qfill { height: 100%; background: var(--good); width: 0; transition: width .4s ease; }
@@ -180,7 +200,7 @@ h2, h3, h4 { letter-spacing: -0.02em; }
 /* Log / console */
 .console {
   background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 14px 16px; margin-top: 20px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 14px 16px; margin-top: 20px; font-family: var(--mono);
   font-size: 12.5px; line-height: 1.7; max-height: 240px; overflow-y: auto;
 }
 .console .line { display: flex; gap: 10px; }
@@ -202,36 +222,31 @@ h2, h3, h4 { letter-spacing: -0.02em; }
 .fchunks { display: flex; gap: 4px; flex-wrap: wrap; }
 .mini { width: 16px; height: 16px; border-radius: 4px; }
 
-/* Prose sections */
-.prose { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+/* Narrative sections */
+section { padding: 80px 0; border-top: 1px solid var(--border); margin-top: 40px; }
+section:first-of-type { margin-top: 8px; }
+h2 { font-size: clamp(26px, 4.2vw, 38px); line-height: 1.12; letter-spacing: -.025em; font-weight: 660; text-align: center; max-width: 780px; margin: 0 auto; }
+.lead { max-width: 700px; margin: 16px auto 0; text-align: center; color: var(--text-secondary); }
+.prose { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 34px; }
 .prose .card {
   background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 28px; box-shadow: var(--shadow);
+  padding: 26px; box-shadow: var(--shadow);
 }
-.prose .card h3 { margin: 0 0 10px; font-size: 20px; }
+.prose .card h3 { margin: 0 0 10px; font-size: 19px; letter-spacing: -.02em; }
 .prose .card p { margin: 0 0 12px; color: var(--text-secondary); font-size: 15.5px; }
 .prose .card p:last-child { margin-bottom: 0; }
 .prose .card strong { color: var(--text); font-weight: 600; }
+pre.block { background: #15161c; color: #ececf4; border-radius: 14px; padding: 20px 22px; font-family: var(--mono); font-size: 13px; line-height: 1.6; overflow-x: auto; max-width: 820px; margin: 30px auto 0; white-space: pre; }
+pre.block .cm { color: #8a8d9a; } pre.block .g { color: #7fd6a0; } pre.block .p { color: #93c5fd; }
 
-/* How to use */
-.howto { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 32px; box-shadow: var(--shadow); }
-.howto ol { margin: 0; padding-left: 22px; }
-.howto li { margin-bottom: 14px; color: var(--text-secondary); font-size: 15.5px; }
-.howto li strong { color: var(--text); }
-.howto h3 { margin: 26px 0 12px; font-size: 19px; }
-details.howto-details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 12px; font-size: clamp(28px, 4.4vw, 40px); letter-spacing: -0.02em; font-weight: 650; margin: 0 0 10px; }
-details.howto-details > summary::-webkit-details-marker { display: none; }
-details.howto-details > summary::before { content: ""; width: 12px; height: 12px; border-right: 2.5px solid var(--accent); border-bottom: 2.5px solid var(--accent); transform: rotate(-45deg); transition: transform .2s; flex: none; }
-details.howto-details[open] > summary::before { transform: rotate(45deg); }
-.tour { background: var(--accent-soft); border-radius: var(--radius-sm); padding: 22px 24px; margin-top: 8px; }
-.tour ol { padding-left: 20px; }
-.tour li { color: var(--text); }
-
-footer { text-align: center; padding: 60px 24px; color: var(--text-secondary); font-size: 14px; border-top: 1px solid var(--border); margin-top: 40px; }
+footer { text-align: center; padding: 60px 24px; color: var(--text-secondary); font-size: 15px; border-top: 1px solid var(--border); }
+footer .name { color: var(--text); font-weight: 600; }
+footer p + p { margin-top: 10px; }
 
 @media (max-width: 780px) {
-  .gap, .prose { grid-template-columns: 1fr; }
-  .hero { padding: 64px 20px 40px; }
+  .prose { grid-template-columns: 1fr; }
+  .hero { padding: 60px 20px 28px; }
+  section { padding: 60px 0; }
   .controls { gap: 14px; }
   .field input, .field select { min-width: 0; width: 100%; }
   .field { flex: 1 1 140px; }
@@ -239,172 +254,39 @@ footer { text-align: center; padding: 60px 24px; color: var(--text-secondary); f
 </style>
 </head>
 <body>
+<noscript><div class="wrap" style="padding:40px 24px;color:#6a6d78">Archipelago is a distributed file system written from scratch in Rust with zero dependencies by Pavan Nallamothu. It does content-addressed chunking, rendezvous placement, quorum reads and writes, and self-healing re-replication, with the whole cluster and network running inside one seeded deterministic simulation. A read returns the exact bytes or fails loudly, never silent corruption. Source: <a href="https://github.com/pavanchow/archipelago">github.com/pavanchow/archipelago</a>.</div></noscript>
+
+<nav><div class="row">
+  <div class="brand"><span class="gem"></span>Archipelago</div>
+  <div class="links"><a href="#sim">Simulator</a><a href="#how">How it works</a><a href="#proof">Proof</a><a href="#use">Use it</a><a class="gh" href="https://github.com/pavanchow/archipelago">GitHub</a></div>
+</div></nav>
 
 <header class="hero">
-  <div class="wrap">
-    <img src="logo.svg" alt="Archipelago logo" width="76" height="76" style="display:block;margin:0 auto 14px">
-    <span class="mark">◆ Archipelago · a from-scratch distributed file system</span>
-    <h1>Archipelago</h1>
-    <p class="tag">Chunk it, hash it, spread it across nodes, and survive losing them. All in one process you can watch.</p>
-    <p class="lede">
-      A real distributed file system with content-addressed chunking, replication, quorum writes, and fault tolerance,
-      with <strong>zero dependencies</strong>. The gap it fills is simple. Everywhere else you need a real multi-machine
-      cluster before you can see any of this behave. Archipelago runs the whole cluster as one deterministic simulation,
-      so a person or an AI agent can write a file, kill a node, partition the network, and watch quorum and content-hash
-      verification decide every read.
-    </p>
-    <div class="cta">
-      <a class="btn btn-primary" href="#playground">Open the playground</a>
-      <a class="btn btn-ghost" href="https://github.com/pavanchow/archipelago">View on GitHub</a>
-    </div>
+  <img src="logo.svg" alt="Archipelago logo" width="72" height="72" style="display:block;margin:0 auto 14px">
+  <p class="eyebrow">Rust · zero dependencies · deterministic simulation</p>
+  <h1>Lose a node,<br>keep every byte.</h1>
+  <p class="sub">Archipelago is a distributed file system written from scratch in Rust with zero dependencies: content-addressed chunking, rendezvous placement, quorum writes, and self-healing re-replication. The unusual part is that the whole cluster, including the network, runs inside one seeded deterministic simulation. Write a file, crash a node, partition the network, and watch quorum and SHA-256 content-hash checks decide every read. A read returns the exact bytes or fails loudly, never silent corruption.</p>
+  <div class="cta">
+    <a class="btn primary" href="#sim">Open the simulation</a>
+    <a class="btn" href="https://github.com/pavanchow/archipelago">View on GitHub</a>
   </div>
 </header>
 
-<div class="wrap">
-
-  <div class="gap">
-    <div class="card">
-      <div class="k">The gap</div>
-      <h3>See it without a cluster</h3>
-      <p>Chunking, replication, quorum, and re-replication normally need many machines to observe. Here they run as a single deterministic process you can step through.</p>
-    </div>
-    <div class="card">
-      <div class="k">What is different</div>
-      <h3>Watch failure decide reads</h3>
-      <p>Split a file into chunks, spread replicas across nodes, kill one and watch chunks re-replicate. Partition the network and see quorum and hash checks resolve each read.</p>
-    </div>
-    <div class="card">
-      <div class="k">The promise</div>
-      <h3>Never returns corrupt bytes</h3>
-      <p>Every chunk is verified against its SHA-256 content hash on read. A read either returns the exact bytes or fails loudly. It never hands back silent corruption.</p>
-    </div>
-  </div>
-
-  <!-- SIMULATOR -->
-  <section id="playground">
-    <h2 class="section-title">Live simulation</h2>
-    <p class="section-sub">A teaching-accurate reimplementation of the cluster model, running entirely in your browser. No servers, no network calls.</p>
-
-    <div class="sim">
-      <div class="controls">
-        <div class="field">
-          <label for="fpath">File path</label>
-          <input id="fpath" type="text" value="/photos/sunset.raw" spellcheck="false">
-        </div>
-        <div class="field">
-          <label for="fsize">Size (chunks)</label>
-          <input id="fsize" type="number" min="1" max="12" value="4">
-        </div>
-        <div class="field">
-          <label for="sample">Sample file</label>
-          <select id="sample">
-            <option value="">Choose…</option>
-            <option value="/photos/sunset.raw|4">/photos/sunset.raw · 4</option>
-            <option value="/db/ledger.db|7">/db/ledger.db · 7</option>
-            <option value="/notes/todo.md|1">/notes/todo.md · 1</option>
-            <option value="/video/clip.mov|10">/video/clip.mov · 10</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="rfactor">Replication R</label>
-          <select id="rfactor">
-            <option value="2">R = 2</option>
-            <option value="3" selected>R = 3</option>
-          </select>
-        </div>
-        <div class="btnrow">
-          <button class="sbtn primary" id="btnWrite">Write</button>
-          <button class="sbtn" id="btnRead">Read</button>
-        </div>
-      </div>
-
-      <div class="btnrow" style="margin-bottom:20px">
-        <button class="sbtn warn" id="btnReplicate">Re-replicate</button>
-        <button class="sbtn" id="btnPartition">Partition network</button>
-        <button class="sbtn" id="btnHealAll">Heal all</button>
-        <button class="sbtn" id="btnRandom">Random workload</button>
-        <button class="sbtn danger" id="btnReset">Reset</button>
-      </div>
-
-      <div class="nodes" id="nodes"></div>
-
-      <div class="quorum" style="margin-top:20px">
-        <span style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.03em">Last write quorum</span>
-        <div class="qbar"><div class="qfill" id="qfill"></div></div>
-        <span class="badge" id="qtext">idle</span>
-      </div>
-
-      <div class="legend">
-        <div class="item"><span class="sw" style="background:var(--accent)"></span> Chunk color = chunk identity (replicas share it)</div>
-        <div class="item"><span class="badge">a1b2c3…</span> content hash (SHA-256)</div>
-        <div class="item"><span class="dot"></span> node healthy</div>
-        <div class="item"><span class="dot" style="background:var(--bad)"></span> node down</div>
-        <div class="item"><span class="sw" style="background:transparent;outline:2px solid var(--warn)"></span> under-replicated</div>
-        <div class="item"><span class="sw" style="background:transparent;outline:2px solid var(--bad)"></span> chunk lost</div>
-      </div>
-
-      <div class="files" id="files"></div>
-
-      <div class="console" id="console"></div>
-    </div>
-  </section>
-
-  <!-- PROSE -->
-  <section>
-    <h2 class="section-title">How it works</h2>
-    <p class="section-sub">The concepts the simulation is built on, in plain terms.</p>
-    <div class="prose">
-      <div class="card">
-        <h3>Architecture</h3>
-        <p>A <strong>metadata service</strong> maps every file path to its ordered list of chunk hashes and tracks the directory tree. A set of <strong>storage nodes</strong> hold the chunks themselves. A client talks to both. It asks metadata where a file's chunks live, then reads or writes those chunks on the storage nodes directly.</p>
-        <p>Nothing here needs a second machine. The metadata service, the nodes, and the message scheduler all run inside one process.</p>
-      </div>
-      <div class="card">
-        <h3>Chunking and content addressing</h3>
-        <p>A file is split into <strong>fixed-size chunks</strong>. Each chunk is named by the <strong>SHA-256 hash of its own bytes</strong>, so identical content is stored once and every reference to a chunk carries a built-in integrity check.</p>
-        <p>The metadata for a file is just the ordered list of those hashes. To rebuild the file you fetch each chunk by hash and concatenate them back in order.</p>
-      </div>
-      <div class="card">
-        <h3>Replication and quorum</h3>
-        <p>Every chunk is copied onto <strong>R storage nodes</strong> chosen by <strong>rendezvous hashing</strong>. Each node scores the chunk, and the top R scorers hold it. Losing one node moves only that node's chunks, not the whole placement.</p>
-        <p>A write is <strong>durable once a quorum of replicas acknowledge</strong>. Reads assemble the file from any live replica of each chunk, so a single slow or dead node never blocks a read.</p>
-      </div>
-      <div class="card">
-        <h3>The durability guarantee</h3>
-        <p>There is <strong>no data loss with fewer than R node failures</strong>. Lose one or two nodes with R at three and every chunk still has a live copy. Under-replicated chunks <strong>re-replicate automatically</strong> once healthy capacity is available, restoring the full replica count.</p>
-        <p>Only when all R replicas of a specific chunk are gone is that file reported <strong>unavailable</strong>. It is never silently returned as corrupt bytes.</p>
-      </div>
-      <div class="card">
-        <h3>Deterministic simulation</h3>
-        <p>The cluster runs on a <strong>seeded message scheduler</strong> that can delay, reorder, drop, and partition messages. The same seed produces the same run every time.</p>
-        <p>That is what makes failures testable. A partition or a dropped acknowledgement is not a flaky accident here. It is a reproducible event you can replay and reason about.</p>
-      </div>
-      <div class="card">
-        <h3>Why that matters</h3>
-        <p>Distributed bugs hide in timing. In a real cluster they surface once in a thousand runs and vanish when you look. A deterministic in-process model turns those rare races into <strong>exact, repeatable scenarios</strong>.</p>
-        <p>For an AI agent this is a safe sandbox to reason about consistency and fault tolerance without provisioning a single machine.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- HOW TO USE -->
-  <section>
-    <details class="howto-details">
+<div class="stage" id="sim">
+  <details class="howto">
     <summary>How to use this playground</summary>
-    <p class="section-sub">Every control, what it does, and what to watch for.</p>
-    <div class="howto">
+    <div class="howbody">
       <ol>
-        <li><strong>Write.</strong> Type a path and a size in chunks, or pick a sample file, then press Write. Watch the file split into chunks. Each chunk gets a content hash and lands on R distinct nodes chosen by hashing. Replicas of the same chunk share one color across nodes. Watch for the quorum meter filling as replicas acknowledge.</li>
-        <li><strong>Read.</strong> Type a path already written, then press Read. The client gathers each chunk from a live replica, verifies its content hash, and reassembles the file in order. The console names which node served each chunk. Watch for served nodes lighting green and the hash check passing on every chunk.</li>
-        <li><strong>Fail node.</strong> Click any node to crash it. It goes dark and dashed. Its chunks are now missing a replica, so those tiles are highlighted <strong>under-replicated</strong> on the nodes that still hold them. Watch for the file status turning amber in the table.</li>
+        <li><strong>Write.</strong> Type a path and a size in chunks, or pick a sample file, then press Write. Watch the file split into chunks. Each chunk gets a content hash and lands on R distinct nodes chosen by hashing. Replicas of the same chunk share one color across nodes. Watch the quorum meter fill as replicas acknowledge.</li>
+        <li><strong>Read.</strong> Type a path already written, then press Read. The client gathers each chunk from a live replica, verifies its content hash, and reassembles the file in order. The console names which node served each chunk. Watch served nodes light green and the hash check pass on every chunk.</li>
+        <li><strong>Fail node.</strong> Click any node to crash it. It goes dark and dashed. Its chunks are now missing a replica, so those tiles are highlighted under-replicated on the nodes that still hold them. Watch the file status turn amber in the table.</li>
         <li><strong>Heal.</strong> Click a downed node again, or press Heal all, to bring nodes back up. A recovered node rejoins and becomes eligible to hold replicas again.</li>
-        <li><strong>Partition network.</strong> Press it to split the cluster into two groups, A and B. The client sits in group A and can only reach group A nodes. Chunks whose only live replicas are stranded in group B become unreachable for reads until the partition heals. Press again to heal the partition.</li>
-        <li><strong>Re-replicate.</strong> Press it to run the repair pass. For every under-replicated chunk it copies a fresh replica onto a healthy, reachable node until the chunk is back to R copies. Watch under-replicated tiles lose their amber outline as R is restored.</li>
+        <li><strong>Partition network.</strong> Split the cluster into two groups, A and B. The client sits in group A and can only reach group A nodes. Chunks whose only live replicas are stranded in group B become unreachable for reads until the partition heals. Press again to heal it.</li>
+        <li><strong>Re-replicate.</strong> Run the repair pass. For every under-replicated chunk it copies a fresh replica onto a healthy, reachable node until the chunk is back to R copies. Watch under-replicated tiles lose their amber outline as R is restored.</li>
         <li><strong>Replication R.</strong> Choose R equals 2 or 3. This sets how many replicas each new chunk gets and how many losses a chunk can survive. It applies to writes made after you change it.</li>
         <li><strong>Random workload.</strong> Writes a few random files at once so you can see many chunks spread across the cluster quickly.</li>
         <li><strong>Reset.</strong> Clears all files and brings every node back to a clean, healthy, unpartitioned state.</li>
       </ol>
-
       <h3>Guided tour</h3>
       <div class="tour">
         <ol>
@@ -417,13 +299,151 @@ footer { text-align: center; padding: 60px 24px; color: var(--text-secondary); f
         </ol>
       </div>
     </div>
-    </details>
-  </section>
+  </details>
 
+  <div class="sim">
+    <div class="controls">
+      <div class="field">
+        <label for="fpath">File path</label>
+        <input id="fpath" type="text" value="/photos/sunset.raw" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="fsize">Size (chunks)</label>
+        <input id="fsize" type="number" min="1" max="12" value="4">
+      </div>
+      <div class="field">
+        <label for="sample">Sample file</label>
+        <select id="sample">
+          <option value="">Choose...</option>
+          <option value="/photos/sunset.raw|4">/photos/sunset.raw · 4</option>
+          <option value="/db/ledger.db|7">/db/ledger.db · 7</option>
+          <option value="/notes/todo.md|1">/notes/todo.md · 1</option>
+          <option value="/video/clip.mov|10">/video/clip.mov · 10</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="rfactor">Replication R</label>
+        <select id="rfactor">
+          <option value="2">R = 2</option>
+          <option value="3" selected>R = 3</option>
+        </select>
+      </div>
+      <div class="btnrow">
+        <button class="sbtn primary" id="btnWrite">Write</button>
+        <button class="sbtn" id="btnRead">Read</button>
+      </div>
+    </div>
+
+    <div class="btnrow" style="margin-bottom:20px">
+      <button class="sbtn warn" id="btnReplicate">Re-replicate</button>
+      <button class="sbtn" id="btnPartition">Partition network</button>
+      <button class="sbtn" id="btnHealAll">Heal all</button>
+      <button class="sbtn" id="btnRandom">Random workload</button>
+      <button class="sbtn danger" id="btnReset">Reset</button>
+    </div>
+
+    <div class="nodes" id="nodes"></div>
+
+    <div class="quorum" style="margin-top:20px">
+      <span style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.03em">Last write quorum</span>
+      <div class="qbar"><div class="qfill" id="qfill"></div></div>
+      <span class="badge" id="qtext">idle</span>
+    </div>
+
+    <div class="legend">
+      <div class="item"><span class="sw" style="background:var(--accent)"></span> Chunk color = chunk identity (replicas share it)</div>
+      <div class="item"><span class="badge">a1b2c3...</span> content hash (SHA-256)</div>
+      <div class="item"><span class="dot"></span> node healthy</div>
+      <div class="item"><span class="dot" style="background:var(--bad)"></span> node down</div>
+      <div class="item"><span class="sw" style="background:transparent;outline:2px solid var(--warn)"></span> under-replicated</div>
+      <div class="item"><span class="sw" style="background:transparent;outline:2px solid var(--bad)"></span> chunk lost</div>
+    </div>
+
+    <div class="files" id="files"></div>
+
+    <div class="console" id="console"></div>
+  </div>
 </div>
 
+<section id="how"><div class="wrap">
+  <h2>How it really works</h2>
+  <p class="lead">The concepts the simulation is built on, in plain terms, each one a small module you can read in an afternoon.</p>
+  <div class="prose">
+    <div class="card">
+      <h3>Architecture</h3>
+      <p>A <strong>metadata service</strong> maps every file path to its ordered list of chunk hashes and tracks the directory tree. A set of <strong>storage nodes</strong> hold the chunks themselves. A client talks to both. It asks metadata where a file's chunks live, then reads or writes those chunks on the storage nodes directly.</p>
+      <p>Nothing here needs a second machine. The metadata service, the nodes, and the message scheduler all run inside one process.</p>
+    </div>
+    <div class="card">
+      <h3>Chunking and content addressing</h3>
+      <p>A file is split into <strong>fixed-size chunks</strong>. Each chunk is named by the <strong>SHA-256 hash of its own bytes</strong>, so identical content is stored once and every reference to a chunk carries a built-in integrity check.</p>
+      <p>The metadata for a file is just the ordered list of those hashes. To rebuild the file you fetch each chunk by hash and concatenate them back in order.</p>
+    </div>
+    <div class="card">
+      <h3>Replication and quorum</h3>
+      <p>Every chunk is copied onto <strong>R storage nodes</strong> chosen by <strong>rendezvous hashing</strong>. Each node scores the chunk, and the top R scorers hold it. Losing one node moves only that node's chunks, not the whole placement.</p>
+      <p>A write is <strong>durable once a quorum of replicas acknowledge</strong>. Reads assemble the file from any live replica of each chunk, so a single slow or dead node never blocks a read.</p>
+    </div>
+    <div class="card">
+      <h3>The durability guarantee</h3>
+      <p>There is <strong>no data loss with fewer than R node failures</strong>. Lose one or two nodes with R at three and every chunk still has a live copy. Under-replicated chunks <strong>re-replicate automatically</strong> once healthy capacity is available, restoring the full replica count.</p>
+      <p>Only when all R replicas of a specific chunk are gone is that file reported <strong>unavailable</strong>. It is never silently returned as corrupt bytes.</p>
+    </div>
+    <div class="card">
+      <h3>Deterministic simulation</h3>
+      <p>The cluster runs on a <strong>seeded message scheduler</strong> that can delay, reorder, drop, and partition messages. The same seed produces the same run every time.</p>
+      <p>That is what makes failures testable. A partition or a dropped acknowledgement is not a flaky accident here. It is a reproducible event you can replay and reason about.</p>
+    </div>
+    <div class="card">
+      <h3>Erasure coding, optional</h3>
+      <p>Instead of replicating each chunk R times, each chunk can be <strong>Reed Solomon encoded</strong> over GF(2^8) into k data plus m parity shards spread over distinct nodes. A read needs any k of the k+m shards, so up to m holders can be lost and the file still reads.</p>
+      <p>A fetched shard is verified against its content address, so a corrupt shard just counts as missing, and lost shard positions are re-encoded onto live nodes as repair.</p>
+    </div>
+  </div>
+</div></section>
+
+<section id="proof"><div class="wrap">
+  <h2>The tests are the point</h2>
+  <p class="lead">Archipelago turns the cluster into a pure function of a seed and an operation script, then holds it to hard properties. Each gate proves one, and they all run under <code>cargo test</code>.</p>
+  <pre class="block"><span class="cm"># the differential gate: a random op stream against an in-memory oracle,</span>
+<span class="cm"># asserting byte-for-byte agreement and matching listings after every op</span>
+$ ARCH_FUZZ_OPS=5000 cargo test --test differential
+<span class="g">ok. 5000 ops, oracle agreement held on every operation</span>
+
+<span class="cm"># the durability gate: crash and partition up to R-1 nodes at adversarial</span>
+<span class="cm"># points, assert no committed file is lost, then heal and re-replicate to R</span>
+$ ARCH_FAULT_FILES=400 cargo test --test faults
+<span class="g">ok. no committed file lost; unavailability reported, never wrong bytes</span>
+
+<span class="cm"># the determinism gate: same seed and script, identical delivery order</span>
+$ cargo test --test determinism
+<span class="g">ok. same seed reproduced the identical run and final state</span></pre>
+  <p class="lead" style="margin-top:26px">A read returns exactly the oracle bytes, or the file is reported unavailable. A committed file that vanishes or comes back wrong is a hard failure. That is the FoundationDB and TigerBeetle style of deterministic simulation testing, applied to a file system small enough to hold in your head.</p>
+</div></section>
+
+<section id="use"><div class="wrap">
+  <h2>Use it</h2>
+  <pre class="block"><span class="cm"># build and test the whole system (Rust, zero dependencies)</span>
+cargo build
+cargo test
+
+<span class="cm"># the demo: write files, spread chunks over five nodes, kill one,</span>
+<span class="cm"># re-replicate onto the survivors, then read every file back verified</span>
+cargo run --bin arch -- demo
+
+<span class="cm"># the interactive session</span>
+cargo run --bin arch
+arch<span class="p">></span> mkdir /docs
+arch<span class="p">></span> put /docs/hello hello archipelago
+arch<span class="p">></span> fail 0
+arch<span class="p">></span> get /docs/hello
+arch<span class="p">></span> stabilize
+arch<span class="p">></span> status</pre>
+</div></section>
+
 <footer>
-  <p>Archipelago · a from-scratch distributed file system · <a href="https://github.com/pavanchow/archipelago">github.com/pavanchow/archipelago</a></p>
+  <p>Archipelago is MIT licensed. Source, tests, and the design notes are on <a href="https://github.com/pavanchow/archipelago">GitHub</a>.</p>
+  <p>By <span class="name">Pavan Nallamothu</span>.</p>
 </footer>
 
 <script>
