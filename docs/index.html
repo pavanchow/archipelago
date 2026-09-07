@@ -6,6 +6,7 @@
 <title>Archipelago: a from-scratch distributed file system with deterministic simulation</title>
 <meta name="description" content="Archipelago by Pavan Nallamothu: a distributed file system written from scratch in Rust with zero dependencies. Content-addressed chunking, rendezvous placement, quorum writes, and self-healing re-replication, with the whole cluster and network running inside one seeded deterministic simulation. Crash a node, partition the network, and watch quorum and SHA-256 checks decide every read.">
 <meta name="author" content="Pavan Nallamothu (pavanchow)">
+<meta name="keywords" content="distributed file system, deterministic simulation testing, content-addressed storage, rendezvous hashing, quorum replication, self-healing, Reed Solomon erasure coding, GF(2^8), SHA-256, chunking, from-scratch Rust, zero dependencies, FoundationDB, TigerBeetle, Pavan Nallamothu, pavanchow">
 <link rel="canonical" href="https://pavanchow.github.io/archipelago/">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <link rel="author" href="https://github.com/pavanchow">
@@ -17,7 +18,7 @@
 <meta name="twitter:title" content="Archipelago: a from-scratch distributed file system with deterministic simulation">
 <meta name="twitter:description" content="Chunk it, hash it, spread it across nodes, and survive losing them. A read returns the exact bytes or fails loudly, never silent corruption.">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Archipelago","applicationCategory":"DeveloperApplication","operatingSystem":"Cross-platform","description":"Archipelago is a distributed file system written from scratch in Rust with zero external dependencies. It does content-addressed chunking, rendezvous placement, replication with quorum reads and writes, self-healing re-replication, and optional Reed Solomon erasure coding, with the entire cluster and network running inside one seeded deterministic simulation for fault injection and exact replay.","url":"https://pavanchow.github.io/archipelago/","author":{"@type":"Person","name":"Pavan Nallamothu"},"programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/archipelago","license":"https://opensource.org/licenses/MIT"}
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Archipelago","applicationCategory":"DeveloperApplication","softwareVersion":"0.1.0","operatingSystem":"Cross-platform","description":"Archipelago is a distributed file system written from scratch in Rust with zero external dependencies. It does content-addressed chunking, rendezvous placement, replication with quorum reads and writes, self-healing re-replication, and optional Reed Solomon erasure coding, with the entire cluster and network running inside one seeded deterministic simulation for fault injection and exact replay.","url":"https://pavanchow.github.io/archipelago/","author":{"@type":"Person","name":"Pavan Nallamothu"},"programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/archipelago","license":"https://opensource.org/licenses/MIT"}
 </script>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"Person","name":"Pavan Nallamothu","alternateName":"pavanchow","url":"https://github.com/pavanchow","sameAs":["https://github.com/pavanchow","https://hackerone.com/pavanchow"]}
@@ -98,6 +99,7 @@ nav .brand { display: flex; align-items: center; gap: 9px; font-size: 18px; font
 nav .brand .gem { width: 15px; height: 15px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: linear-gradient(135deg, var(--accent2), var(--accent)); }
 nav .links { display: flex; gap: 24px; align-items: center; }
 nav .links a { color: var(--text); font-size: 14.5px; }
+nav .links .v { color: var(--text-secondary); font-family: var(--mono); font-size: 12px; }
 @media (max-width: 640px){ nav .links a:not(.gh){ display: none; } }
 
 /* Hero */
@@ -239,6 +241,15 @@ h2 { font-size: clamp(26px, 4.2vw, 38px); line-height: 1.12; letter-spacing: -.0
 pre.block { background: #15161c; color: #ececf4; border-radius: 14px; padding: 20px 22px; font-family: var(--mono); font-size: 13px; line-height: 1.6; overflow-x: auto; max-width: 820px; margin: 30px auto 0; white-space: pre; }
 pre.block .cm { color: #8a8d9a; } pre.block .g { color: #7fd6a0; } pre.block .p { color: #93c5fd; }
 
+/* Comparison rows */
+.cmp { max-width: 820px; margin: 34px auto 0; }
+.cmp .crow { display: grid; grid-template-columns: minmax(150px, 1fr) 2fr; gap: 12px 34px; padding: 22px 0; border-top: 1px solid var(--border); }
+.cmp .crow:first-child { border-top: none; }
+.cmp .crow b { font-size: 17px; letter-spacing: -.01em; }
+.cmp .crow p { color: var(--text-secondary); font-size: 15px; margin: 0; }
+.cmp .crow.self b { color: var(--accent); }
+@media (max-width: 640px){ .cmp .crow { grid-template-columns: 1fr; gap: 5px; } }
+
 footer { text-align: center; padding: 60px 24px; color: var(--text-secondary); font-size: 15px; border-top: 1px solid var(--border); }
 footer .name { color: var(--text); font-weight: 600; }
 footer p + p { margin-top: 10px; }
@@ -258,7 +269,7 @@ footer p + p { margin-top: 10px; }
 
 <nav><div class="row">
   <div class="brand"><img src="logo.svg" class="brandlogo" alt="" width="22" height="22">Archipelago</div>
-  <div class="links"><a href="#sim">Simulator</a><a href="#how">How it works</a><a href="#proof">Proof</a><a href="#use">Use it</a><a class="gh" href="https://github.com/pavanchow/archipelago">GitHub</a></div>
+  <div class="links"><a href="#sim">Simulator</a><a href="#how">How it works</a><a href="#compare">Compare</a><a href="#proof">Proof</a><a href="#use">Use it</a><a class="gh" href="https://github.com/pavanchow/archipelago">GitHub</a><span class="v">v0.1.0</span></div>
 </div></nav>
 
 <header class="hero">
@@ -402,22 +413,36 @@ footer p + p { margin-top: 10px; }
   </div>
 </div></section>
 
+<section id="compare"><div class="wrap">
+  <h2>How it compares</h2>
+  <p class="lead">Archipelago is not a production replacement for a real cluster file system. It is the readable, deterministic version of the same ideas, built so the failure modes are reproducible instead of flaky.</p>
+  <div class="cmp">
+    <div class="crow"><b>Ceph, HDFS, GlusterFS</b><p>Production distributed file systems, battle-tested across many machines, with POSIX access, rebalancing, and huge real clusters. They need real hardware and real networks to run, and their most interesting bugs live in timing that is slow and flaky to reproduce on that hardware.</p></div>
+    <div class="crow self"><b>Archipelago</b><p>The same core ideas, chunking, rendezvous placement, quorum, replication, self-healing, and Reed Solomon erasure coding, in code small enough to read in an afternoon with zero external dependencies. The whole cluster and network run inside one process as a seeded deterministic simulation, so a partition or a dropped acknowledgement is a reproducible event you can replay from its seed and check against an in-memory oracle.</p></div>
+  </div>
+  <p class="lead" style="margin-top:26px">Honest non-goals: a single process rather than real machines, a simulated scheduler rather than real RPC, no POSIX mount, and no tuning for production scale. The point is provable correctness you can read, not throughput. This is the FoundationDB and TigerBeetle style of deterministic simulation testing, applied to a file system.</p>
+</div></section>
+
 <section id="proof"><div class="wrap">
   <h2>The tests are the point</h2>
   <p class="lead">Archipelago turns the cluster into a pure function of a seed and an operation script, then holds it to hard properties. Each gate proves one, and they all run under <code>cargo test</code>.</p>
-  <pre class="block"><span class="cm"># the differential gate: a random op stream against an in-memory oracle,</span>
-<span class="cm"># asserting byte-for-byte agreement and matching listings after every op</span>
+  <pre class="block"><span class="cm"># the whole suite is pure and dependency-free; one command runs every gate</span>
+$ cargo test
+<span class="g">test result: ok. 51 passed; 0 failed</span>   <span class="cm"># src/lib.rs unit tests</span>
+<span class="g">test result: ok.  1 passed; 0 failed</span>   <span class="cm"># differential: random ops vs an in-memory oracle</span>
+<span class="g">test result: ok.  5 passed; 0 failed</span>   <span class="cm"># faults: durability under crash and partition</span>
+<span class="g">test result: ok.  6 passed; 0 failed</span>   <span class="cm"># erasure: Reed Solomon over GF(2^8)</span>
+<span class="g">test result: ok.  2 passed; 0 failed</span>   <span class="cm"># determinism: same seed, identical run</span>
+<span class="g">test result: ok.  7 passed; 0 failed</span>   <span class="cm"># boundaries: empty files, renames, edge sizes</span>
+<span class="g">test result: ok.  1 passed; 0 failed</span>   <span class="cm"># fault_differential: faults interleaved with the oracle</span>
+<span class="g">test result: ok.  2 passed; 0 failed</span>   <span class="cm"># roundtrip: chunking and content addressing</span>
+<span class="g">test result: ok.  3 passed; 0 failed</span>   <span class="cm"># stress: samples the Options space under faults</span>
+
+<span class="cm"># turn the fuzz knobs up for a longer adversarial run</span>
 $ ARCH_FUZZ_OPS=5000 cargo test --test differential
-<span class="g">ok. 5000 ops, oracle agreement held on every operation</span>
-
-<span class="cm"># the durability gate: crash and partition up to R-1 nodes at adversarial</span>
-<span class="cm"># points, assert no committed file is lost, then heal and re-replicate to R</span>
+<span class="g">test result: ok. 1 passed; 0 failed; finished in 55.40s</span>
 $ ARCH_FAULT_FILES=400 cargo test --test faults
-<span class="g">ok. no committed file lost; unavailability reported, never wrong bytes</span>
-
-<span class="cm"># the determinism gate: same seed and script, identical delivery order</span>
-$ cargo test --test determinism
-<span class="g">ok. same seed reproduced the identical run and final state</span></pre>
+<span class="g">test result: ok. 5 passed; 0 failed; finished in 17.95s</span></pre>
   <p class="lead" style="margin-top:26px">A read returns exactly the oracle bytes, or the file is reported unavailable. A committed file that vanishes or comes back wrong is a hard failure. That is the FoundationDB and TigerBeetle style of deterministic simulation testing, applied to a file system small enough to hold in your head.</p>
 </div></section>
 
