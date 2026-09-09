@@ -3,25 +3,97 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Archipelago: a from-scratch distributed file system with deterministic simulation</title>
-<meta name="description" content="Archipelago by Pavan Nallamothu: a distributed file system written from scratch in Rust with zero dependencies. Content-addressed chunking, rendezvous placement, quorum writes, and self-healing re-replication, with the whole cluster and network running inside one seeded deterministic simulation. Crash a node, partition the network, and watch quorum and SHA-256 checks decide every read.">
-<meta name="author" content="Pavan Nallamothu (pavanchow)">
-<meta name="keywords" content="distributed file system, deterministic simulation testing, content-addressed storage, rendezvous hashing, quorum replication, self-healing, Reed Solomon erasure coding, GF(2^8), SHA-256, chunking, from-scratch Rust, zero dependencies, FoundationDB, TigerBeetle, Pavan Nallamothu, pavanchow">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+<title>Archipelago: a distributed file system in Rust | Pavan Nallamothu</title>
+<meta name="description" content="Archipelago is a distributed file system in Rust: quorum writes, self-healing, content-addressed chunks, tested by deterministic simulation. By Pavan Nallamothu.">
+<meta name="author" content="Pavan Nallamothu">
+<meta name="keywords" content="archipelago, archipelago rust, distributed file system, deterministic simulation testing, content-addressed storage, rendezvous hashing, quorum replication, self-healing re-replication, Reed Solomon erasure coding, SHA-256, chunking, fault injection, build a distributed file system, Pavan Nallamothu, pavanchow">
 <link rel="canonical" href="https://pavanchow.github.io/archipelago/">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <link rel="author" href="https://github.com/pavanchow">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Archipelago: a from-scratch distributed file system with deterministic simulation">
-<meta property="og:description" content="A distributed file system in Rust, zero dependencies: chunking, rendezvous placement, quorum, and self-healing, with the whole cluster running as one seeded simulation you can fault-inject and replay. By Pavan Nallamothu.">
+<meta property="og:site_name" content="Pavan Nallamothu">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Archipelago: a distributed file system in Rust | Pavan Nallamothu">
+<meta property="og:description" content="A distributed file system in Rust, zero dependencies: chunking, rendezvous placement, quorum, and self-healing, with the whole cluster running as one seeded simulation you can fault-inject and replay.">
 <meta property="og:url" content="https://pavanchow.github.io/archipelago/">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Archipelago: a from-scratch distributed file system with deterministic simulation">
+<meta property="og:image" content="https://pavanchow.github.io/archipelago/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Archipelago by Pavan Nallamothu">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Archipelago: a distributed file system in Rust | Pavan Nallamothu">
 <meta name="twitter:description" content="Chunk it, hash it, spread it across nodes, and survive losing them. A read returns the exact bytes or fails loudly, never silent corruption.">
+<meta name="twitter:image" content="https://pavanchow.github.io/archipelago/og-image.png">
+<meta name="twitter:creator" content="@pavanchow">
+<meta name="twitter:site" content="@pavanchow">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Archipelago","applicationCategory":"DeveloperApplication","softwareVersion":"0.1.0","operatingSystem":"Cross-platform","description":"Archipelago is a distributed file system written from scratch in Rust with zero external dependencies. It does content-addressed chunking, rendezvous placement, replication with quorum reads and writes, self-healing re-replication, and optional Reed Solomon erasure coding, with the entire cluster and network running inside one seeded deterministic simulation for fault injection and exact replay.","url":"https://pavanchow.github.io/archipelago/","author":{"@type":"Person","name":"Pavan Nallamothu"},"programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/archipelago","license":"https://opensource.org/licenses/MIT"}
-</script>
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Person","name":"Pavan Nallamothu","alternateName":"pavanchow","url":"https://github.com/pavanchow","sameAs":["https://github.com/pavanchow","https://hackerone.com/pavanchow"]}
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://pavanchow.github.io/archipelago/#software",
+      "name": "Archipelago",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Cross-platform",
+      "description": "Archipelago is a distributed file system written from scratch in Rust with zero external dependencies. It does content-addressed chunking, rendezvous placement, replication with quorum reads and writes, self-healing re-replication, and optional Reed Solomon erasure coding, with the entire cluster and network running inside one seeded deterministic simulation for fault injection and exact replay.",
+      "url": "https://pavanchow.github.io/archipelago/",
+      "image": "https://pavanchow.github.io/archipelago/og-image.png",
+      "softwareVersion": "0.1.0",
+      "programmingLanguage": "Rust",
+      "codeRepository": "https://github.com/pavanchow/archipelago",
+      "license": "https://opensource.org/licenses/MIT",
+      "datePublished": "2026-08-21",
+      "author": { "@id": "https://github.com/pavanchow#person" },
+      "publisher": { "@id": "https://github.com/pavanchow#person" },
+      "keywords": "distributed file system, deterministic simulation testing, content-addressed storage, rendezvous hashing, quorum replication, self-healing re-replication, Reed Solomon erasure coding",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "featureList": [
+        "Content-addressed chunking with SHA-256 verification on every read",
+        "Rendezvous hashing for placement across nodes",
+        "Quorum reads and writes for durability",
+        "Self-healing re-replication after node loss",
+        "Optional Reed Solomon erasure coding",
+        "Whole cluster and network run inside one seeded deterministic simulation for fault injection and replay"
+      ]
+    },
+    {
+      "@type": "Person",
+      "@id": "https://github.com/pavanchow#person",
+      "name": "Pavan Nallamothu",
+      "alternateName": "pavanchow",
+      "url": "https://github.com/pavanchow",
+      "jobTitle": "Software Engineer and Security Researcher",
+      "knowsAbout": ["Rust", "distributed systems", "distributed file systems", "deterministic simulation testing", "replication", "content-addressed storage"],
+      "sameAs": ["https://github.com/pavanchow", "https://hackerone.com/pavanchow"]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://pavanchow.github.io/archipelago/#website",
+      "name": "Archipelago by Pavan Nallamothu",
+      "url": "https://pavanchow.github.io/archipelago/",
+      "author": { "@id": "https://github.com/pavanchow#person" }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Pavan Nallamothu", "item": "https://github.com/pavanchow" },
+        { "@type": "ListItem", "position": 2, "name": "Archipelago", "item": "https://pavanchow.github.io/archipelago/" }
+      ]
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://pavanchow.github.io/archipelago/#webpage",
+      "url": "https://pavanchow.github.io/archipelago/",
+      "name": "Archipelago: a distributed file system in Rust | Pavan Nallamothu",
+      "isPartOf": { "@id": "https://pavanchow.github.io/archipelago/#website" },
+      "about": { "@id": "https://pavanchow.github.io/archipelago/#software" },
+      "author": { "@id": "https://github.com/pavanchow#person" },
+      "inLanguage": "en"
+    }
+  ]
+}
 </script>
 <style>
 :root {
@@ -468,7 +540,18 @@ arch<span class="p">></span> status</pre>
 
 <footer>
   <p>Archipelago is MIT licensed. Source, tests, and the design notes are on <a href="https://github.com/pavanchow/archipelago">GitHub</a>.</p>
-  <p>By <span class="name">Pavan Nallamothu</span>.</p>
+  <nav class="moretools" aria-label="More open-source tools by Pavan Nallamothu" style="margin:28px auto 0;max-width:760px">
+    <p style="font-weight:600;margin-bottom:10px">More open-source tools by Pavan Nallamothu</p>
+    <p style="font-size:14.5px;line-height:1.9">
+      <a href="https://pavanchow.github.io/aurora/">Aurora, an amnesic RAM-only aarch64 kernel</a> &middot;
+      <a href="https://pavanchow.github.io/alchemist/">Alchemist, a compiler that lowers a small language to bytecode and runs it on a VM</a> &middot;
+      <a href="https://pavanchow.github.io/anvil/">Anvil, a compiler backend with a graph coloring register allocator</a> &middot;
+      <a href="https://pavanchow.github.io/atelier/">Atelier, a code-intelligence engine with go to definition and rename</a> &middot;
+      <a href="https://pavanchow.github.io/unweave/">Unweave, an EVM bytecode disassembler in Rust</a> &middot;
+      <a href="https://github.com/pavanchow">All projects on GitHub (github.com/pavanchow)</a>
+    </p>
+  </nav>
+  <p style="margin-top:24px">By <span class="name">Pavan Nallamothu</span>.</p>
 </footer>
 
 <script>
