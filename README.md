@@ -12,6 +12,8 @@ machine oracle, all without threads or real sockets.
 
 **[Live demo](https://pavanchow.github.io/archipelago/)** · MIT licensed · pure Rust
 
+Built from scratch by [Pavan Nallamothu](https://pavanchow.github.io/) ([LinkedIn](https://www.linkedin.com/in/pavanchow/), [GitHub](https://github.com/pavanchow)).
+
 ## The gap it fills
 
 Real distributed file systems are hard to test because the interesting bugs live
